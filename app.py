@@ -9,11 +9,10 @@ import plotly.graph_objs as go
 st.set_page_config(page_title="수학 애니메이션 튜터", layout="wide")
 
 # ───── 최초 1회 공지 ─────
-# ───── 최초 1회 공지 ─────
 if "show_notice" not in st.session_state:
     st.session_state.show_notice = True   # 첫 방문에만 보여주기
 
-notice_md = """
+NOTICE_MD = """
 ### ✨ 업데이트 안내
 - 이 앱은 **매주 새로운 수학 애니메이션**을 추가합니다.
 - 현재는 **중·고등학교 수학**(포물선/쌍곡선, 삼각함수, 미분·적분, 선형회귀, 테일러 시리즈, 푸리에 변환) 위주로 제공됩니다.
@@ -23,64 +22,28 @@ notice_md = """
 **교육 콘텐츠 개발**·맞춤 커리큘럼 제작을 도와드립니다.
 """
 
-def _notice_body():
-    st.markdown(notice_md)
+def render_notice_body():
+    st.markdown(NOTICE_MD)
     st.divider()
-    # 고유 key + rerun 이 포인트!
     if st.button("닫기", key="notice_close_btn", use_container_width=True):
         st.session_state.show_notice = False
         try:
-            st.rerun()  # Streamlit ≥ 1.27
+            st.rerun()                 # 최신 버전
         except Exception:
-            st.experimental_rerun()  # 더 구버전 대비
+            st.experimental_rerun()    # 구버전 대응
 
 if st.session_state.show_notice:
-    if hasattr(st, "dialog"):  # Streamlit ≥ 1.36
+    if hasattr(st, "dialog"):          # Streamlit ≥ 1.36
         @st.dialog("📢 공지사항")
         def _notice_dialog():
-            _notice_body()
+            render_notice_body()
         _notice_dialog()
-    elif hasattr(st, "modal"):  # 1.32 ~ 1.35
+    elif hasattr(st, "modal"):         # 1.32 ~ 1.35
         with st.modal("📢 공지사항"):
-            _notice_body()
-    else:  # 더 구버전
+            render_notice_body()
+    else:                              # 더 구버전
         with st.expander("📢 공지사항", expanded=True):
-            _notice_body()
-
-notice_md = """
-### ✨ 업데이트 안내
-- 이 앱은 **매주 새로운 수학 애니메이션**을 추가합니다.
-- 현재는 **중·고등학교 수학**(포물선/쌍곡선, 삼각함수, 미분·적분, 선형회귀, 테일러 시리즈, 푸리에 변환) 위주로 제공됩니다.
-
-### 📬 교육 관계자 연락처
-👉 **[aaljo2@naver.com](mailto:aaljo2@naver.com)**  
-**교육 콘텐츠 개발**·맞춤 커리큘럼 제작을 도와드립니다.
-"""
-
-if not st.session_state.notice_shown:
-    if hasattr(st, "dialog"):            # Streamlit ≥ 1.36
-        @st.dialog("📢 공지사항")
-        def _notice():
-            st.markdown(notice_md)
-            st.divider()
-            if st.button("닫기", use_container_width=True):
-                st.session_state.notice_shown = True
-        _notice()
-    elif hasattr(st, "modal"):           # 1.32 ~ 1.35
-        with st.modal("📢 공지사항"):
-            st.markdown(notice_md)
-            st.divider()
-            if st.button("닫기", use_container_width=True):
-                st.session_state.notice_shown = True
-    else:                                # 더 구버전
-        with st.expander("📢 공지사항", expanded=True):
-            st.markdown(notice_md)
-            if st.button("닫기", use_container_width=True):
-                st.session_state.notice_shown = True
-        try:
-            st.toast("공지사항을 확인해 주세요 🙂", icon="📢")
-        except Exception:
-            pass
+            render_notice_body()
 
 # ───── 앱 제목 ─────
 st.title("수학 애니메이션 튜터 (Streamlit, Free Plan)")
@@ -334,7 +297,7 @@ with tabs[6]:
     with b2:
         if st.button("⏹ 정지", key="e_stop"): st.session_state.euler_play = False
 
-    # 좌/우 출력 플레이스홀더 (여기서 key 사용하지 마세요)
+    # 좌/우 출력 플레이스홀더 (여기서 key 사용 X)
     left, right = st.columns(2)
     with left:  ph_circle = st.empty()
     with right: ph_wave   = st.empty()
@@ -370,17 +333,14 @@ with tabs[6]:
             x = amp*np.cos(omega*t); y = amp*np.sin(omega*t)
             t_hist.append(t); y_hist.append(np.sin(omega*t))
 
-            # 중요: placeholder만 업데이트 (key 절대 넣지 않음)
             ph_circle.plotly_chart(circle_fig(x, y), use_container_width=True)
             ph_wave.plotly_chart(wave_fig(np.array(t_hist), np.array(y_hist), t, y_hist[-1]),
                                  use_container_width=True)
 
-            # FPS 유지
             sleep = (frame+1)/fps - (time.perf_counter() - start)
             if sleep > 0: time.sleep(sleep)
         st.session_state.euler_play = False
     else:
-        # 정지 상태 초기 화면
         ph_circle.plotly_chart(circle_fig(amp*np.cos(0), amp*np.sin(0)), use_container_width=True)
         ph_wave.plotly_chart(wave_fig(np.array([0.0]), np.array([0.0]), 0.0, 0.0), use_container_width=True)
 
