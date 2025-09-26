@@ -7,6 +7,25 @@ import plotly.graph_objs as go
 
 # ───── 페이지 설정 ─────
 st.set_page_config(page_title="수학 애니메이션 튜터", layout="wide")
+# 탭이 많을 때 가로 스크롤 + 2줄까지 줄바꿈
+st.markdown("""
+<style>
+/* 탭 리스트 영역 */
+.stTabs [role="tablist"]{
+  gap: .25rem;
+  overflow-x: auto;         /* 가로 스크롤 */
+  padding: .25rem 0;
+  scrollbar-width: thin;
+  flex-wrap: wrap;          /* 2줄 이상 줄바꿈 허용 */
+}
+/* 각 탭 버튼 */
+.stTabs [role="tab"]{
+  flex: 0 0 auto;           /* 줄바꿈/스크롤 시 폭 고정 */
+  font-size: .95rem;        /* 글자 조금 줄이기 */
+  padding: .35rem .7rem;    /* 패딩 축소 */
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ───── 최초 1회 공지 ─────
 if "show_notice" not in st.session_state:
