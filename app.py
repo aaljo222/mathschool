@@ -8,6 +8,29 @@ import plotly.graph_objs as go
 import numpy as np, math, time
 import plotly.graph_objects as go
 import streamlit as st
+# ── Modal helpers ─────────────────────────────────────────────────────────────
+def open_modal(title: str, body_md: str, key: str = "evt"):
+    """Streamlit 버전에 맞춰 dialog/modal로 열기"""
+    def _content():
+        st.markdown(body_md)
+        c1, c2 = st.columns([1,1])
+        if c1.button("닫기", key=f"{key}_close"):
+            st.session_state[key] = False
+            try: st.rerun()
+            except Exception: st.experimental_rerun()
+
+    if hasattr(st, "dialog"):           # Streamlit >= 1.36
+        @st.dialog(title)
+        def _dlg(): _content()
+        _dlg()
+    elif hasattr(st, "modal"):           # 1.32 ~ 1.35
+        with st.modal(title): _content()
+    else:                                # fallback
+        st.warning(body_md)
+
+def trigger_modal(payload: dict):
+    """어디서든 이벤트마다 호출 → 전역 핸들러가 처리"""
+    st.session_state["__modal_payload__"] = payload
 
 # ---- 유틸: 분수 ----
 def _gcd(a:int, b:int)->int:
@@ -565,65 +588,78 @@ with tabs[8]:
     tool = st.radio("도구 선택", ["분수 더하기", "옴의 법칙(DC)", "AC 파형·위상(애니메이션)", "저항 직렬/병렬"], horizontal=True)
 
     # ---------- 분수 더하기 ----------
-    if tool == "분수 더하기":
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**분수 1**")
-            n1 = st.number_input("분자₁", value=1, step=1)
-            d1 = st.number_input("분모₁(0 제외)", value=2, step=1)
-        with c2:
-            st.markdown("**분수 2**")
-            n2 = st.number_input("분자₂", value=1, step=1)
-            d2 = st.number_input("분모₂(0 제외)", value=3, step=1)
+    # ---------- 분수 더하기 ----------
+if tool == "분수 더하기":
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**분수 1**")
+        n1 = st.number_input("분자₁", value=1, step=1, format="%d")
+        d1 = st.number_input("분모₁(0 제외)", value=2, step=1, format="%d")
+    with c2:
+        st.markdown("**분수 2**")
+        n2 = st.number_input("분자₂", value=1, step=1, format="%d")
+        d2 = st.number_input("분모₂(0 제외)", value=3, step=1, format="%d")
 
-        if d1 == 0 or d2 == 0:
-            st.error("분모는 0이 될 수 없습니다.")
-        else:
-            L = _lcm(d1, d2)
-            n_sum = n1*(L//d1) + n2*(L//d2)
-            n_red, d_red = simplify(n_sum, L)
-            mix = to_mixed(n_red, d_red)
+    if d1 == 0 or d2 == 0:
+        st.error("분모는 0이 될 수 없습니다.")
+    else:
+        # 1) 입력 두 분수의 합을 계산(항상 표시)
+        L = _lcm(int(d1), int(d2))
+        n_sum = int(n1)*(L//int(d1)) + int(n2)*(L//int(d2))
+        nr, dr = simplify(n_sum, L)
+        mix = to_mixed(nr, dr)
 
-            st.latex(rf"""\frac{{{n1}}}{{{d1}}} + \frac{{{n2}}}{{{d2}}}
-            = \frac{{{n1}\cdot{L//d1}}}{{{L}}} + \frac{{{n2}\cdot{L//d2}}}{{{L}}}
-            = \frac{{{n_sum}}}{{{L}}}
-            = \frac{{{n_red}}}{{{d_red}}}""")
-            if mix:
-                q, r, dd = mix
-                if r==0:
-                    st.markdown(f"**대답:** {q}")
+        st.latex(rf"""\frac{{{n1}}}{{{d1}}} + \frac{{{n2}}}{{{d2}}}
+        = \frac{{{n1}\cdot{L//d1}}}{{{L}}} + \frac{{{n2}\cdot{L//d2}}}{{{L}}}
+        = \frac{{{n_sum}}}{{{L}}}
+        = \frac{{{nr}}}{{{dr}}}""")
+        if mix:
+            q, r, dd = mix
+            if r == 0:
+                st.markdown(f"**대답:** {q}")
+            else:
+                st.markdown(f"**대답:** 대분수 **{q} {r}/{dd}** (기약분수 {nr}/{dr})")
+
+        st.divider()
+        st.markdown("#### 🧩 연습 모드")
+
+        # 2) 연습 문제 뽑기/채점 (분리!)
+        if "frac_q" not in st.session_state:
+            st.session_state.frac_q = (1, 2, 1, 3)
+
+        if st.button("새 문제 뽑기"):
+            import random
+            st.session_state.frac_q = (
+                random.randint(-5, 5) or 1,
+                random.randint(1, 9),
+                random.randint(-5, 5) or 1,
+                random.randint(1, 9)
+            )
+
+        a1, b1, a2, b2 = st.session_state.frac_q
+        st.write(f"문제: {a1}/{b1} + {a2}/{b2}")
+        ua = st.text_input("정답(기약분수 형태, 예: 5/6 또는 -7/3)", key="ua_input")
+
+        ans_n, ans_d = add_fractions(a1, b1, a2, b2)
+
+        if ua.strip():
+            try:
+                s = ua.replace(" ", "")
+                sn, sd = map(int, s.split("/"))
+                sn, sd = simplify(sn, sd)
+                if (sn, sd) == (ans_n, ans_d):
+                    st.success("정답! ✅")
+                    st.balloons()
+                    trigger_modal({
+                        "title": "정답입니다! 🎉",
+                        "body": f"기약분수 **{ans_n}/{ans_d}** 가 맞아요. 멋져요!",
+                        "key": "frac_ok"
+                    })
                 else:
-                    st.markdown(f"**대답:** 대분수 **{q} {r}/{dd}** (기약분수 {n_red}/{d_red})")
+                    st.error(f"오답 ❌  정답: {ans_n}/{ans_d}")
+            except Exception:
+                st.warning(f"형식이 올바르지 않습니다. 정답: {ans_n}/{ans_d}")
 
-            # 연습 모드
-            st.divider()
-            st.markdown("#### 🧩 연습 모드")
-            if "frac_q" not in st.session_state:
-                st.session_state.frac_q = (1,2,1,3)
-            if st.button("새 문제 뽑기"):
-                import random
-                st.session_state.frac_q = (
-                    random.randint(-5,5) or 1,
-                    random.randint(1,9),
-                    random.randint(-5,5) or 1,
-                    random.randint(1,9)
-                )
-            a1,b1,a2,b2 = st.session_state.frac_q
-            st.write(f"문제: {a1}/{b1} + {a2}/{b2}")
-            ua = st.text_input("정답(기약분수 형태, 예: 5/6 또는 -7/3)", "")
-            nr, dr = add_fractions(a1,b1,a2,b2)
-            if ua.strip():
-                try:
-                    ss = ua.replace(" ", "")
-                    sn, sd = ss.split("/")
-                    sn, sd = int(sn), int(sd)
-                    sn, sd = simplify(sn, sd)
-                    if (sn,sd)==(nr,dr):
-                        st.success("정답! ✅")
-                    else:
-                        st.error(f"오답 ❌  정답: {nr}/{dr}")
-                except Exception:
-                    st.warning(f"형식이 올바르지 않습니다. 정답: {nr}/{dr}")
 
     # ---------- 옴의 법칙(DC) ----------
     elif tool == "옴의 법칙(DC)":
@@ -658,8 +694,22 @@ with tabs[8]:
         Vp = Vrms*math.sqrt(2); Ip = Irms*math.sqrt(2)
         PF = math.cos(phi); S = Vrms*Irms; P = S*PF; Q = S*math.sin(phi)
 
+
         st.caption(f"PF = cos φ = {PF:.3f},  유효전력 P = {P:.2f} W,  무효전력 Q = {Q:.2f} var,  피상전력 S = {S:.2f} VA")
 
+        # 이벤트: PF 기준 미만이면 1회 경고 모달
+        if PF < 0.80 and not st.session_state.get("pf_warned", False):
+            st.session_state["pf_warned"] = True
+            trigger_modal({
+                "title": "역률 경고 ⚡",
+                "body": (
+                    f"현재 역률 PF = **{PF:.2f}** (φ={phi_deg:.1f}°) 입니다.\n\n"
+                    f"- 유효전력 P ≈ **{P:.1f} W**\n"
+                    f"- 무효전력 Q ≈ **{Q:.1f} var**\n"
+                    f"- 목표 PF 0.95로 보상하려면 **콘덴서 보상**(Qc = P·(tanφ₁−tanφ₂))을 검토하세요."
+                ),
+                "key": "pf_warn"
+            })
         # 재생/정지
         if "ac_play" not in st.session_state: st.session_state.ac_play = False
         c1, c2 = st.columns([1,1])
@@ -702,3 +752,8 @@ with tabs[8]:
 
 st.markdown("---")
 st.caption("이재오에게 저작권이 있으며 개발이나 협업하고자 하시는 관계자는 연락바랍니다")
+# ── Global modal dispatcher (run once at end) ─────────────────────────────────
+payload = st.session_state.get("__modal_payload__")
+if payload:
+    open_modal(payload.get("title", "알림"), payload.get("body", ""), key=payload.get("key","evt"))
+    st.session_state["__modal_payload__"] = None
