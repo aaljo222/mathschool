@@ -636,23 +636,7 @@ with tabs[8]:
             ua = st.text_input("정답(기약분수, 예: 5/6 또는 -7/3)", key="ua_input")
 
             ans_n, ans_d = add_fractions(a1,b1,a2,b2)
-            if ua.strip():
-                try:
-                    sn, sd = map(int, ua.replace(" ", "").split("/"))
-                    sn, sd = simplify(sn, sd)
-                    if (sn, sd) == (ans_n, ans_d):
-                        st.success("정답! ✅"); st.balloons()
-                        if not st.session_state.get("frac_ok_shown", False):   # ← 추가
-                            trigger_modal({
-                                "title": "정답입니다! 🎉",
-                                "body": f"기약분수 **{ans_n}/{ans_d}** 가 맞아요. 멋져요!",
-                                "key": "frac_ok"
-                            })
-                            st.session_state["frac_ok_shown"] = True          # ← 추가
-                    else:
-                        st.error(f"오답 ❌  정답: {ans_n}/{ans_d}")
-                except Exception:
-                    st.warning(f"형식이 올바르지 않습니다. 정답: {ans_n}/{ans_d}")
+           
 
     # ---------- 2) 옴의 법칙(DC) ----------
     elif tool == "옴의 법칙(DC)":
