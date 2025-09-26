@@ -5,6 +5,81 @@ import numpy as np
 import streamlit as st
 import plotly.graph_objs as go
 
+import numpy as np, math, time
+import plotly.graph_objects as go
+import streamlit as st
+
+# ---- 유틸: 분수 ----
+def _gcd(a:int, b:int)->int:
+    a, b = abs(a), abs(b)
+    while b: a, b = b, a % b
+    return max(a, 1)
+
+def _lcm(a:int, b:int)->int:
+    return abs(a*b) // _gcd(a,b)
+
+def simplify(n:int, d:int):
+    if d == 0: return n, d
+    g = _gcd(n, d)
+    n //= g; d //= g
+    if d < 0: n, d = -n, -d
+    return n, d
+
+def add_fractions(n1,d1,n2,d2):
+    L = _lcm(d1, d2)
+    n = n1*(L//d1) + n2*(L//d2)
+    return simplify(n, L)
+
+def to_mixed(n:int, d:int):
+    if d == 0: return None
+    q, r = divmod(abs(n), d)
+    sgn = -1 if n<0 else 1
+    return sgn*q, r, d  # (정수부, 분자, 분모)
+
+# ---- 유틸: Plotly 그리기 ----
+def phasor_fig(V, I, phi, title="Phasor"):
+    # V: 전압(피크), I: 전류(피크), phi: 위상차(rad, V→I)
+    R = max(V, I) * 1.25 + 0.1
+    th = np.linspace(0, 2*np.pi, 360)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=R*np.cos(th)/R, y=R*np.sin(th)/R, mode="lines", name="unit circle", opacity=0.35))
+    fig.add_trace(go.Scatter(x=[0, 1], y=[0, 0], mode="lines+markers", name="V(참조)"))
+    fig.add_trace(go.Scatter(x=[0, math.cos(phi)], y=[0, math.sin(phi)], mode="lines+markers", name="I(위상 이동)"))
+    lim = 1.3
+    fig.update_xaxes(range=[-lim, lim], zeroline=True); fig.update_yaxes(range=[-lim, lim], scaleanchor="x", scaleratio=1)
+    fig.update_layout(template="plotly_white", title=title, height=420)
+    return fig
+
+def waveform_fig(Vp, Ip, f, phi, dur=0.1):
+    t = np.linspace(0, dur, 1000)
+    v = Vp*np.sin(2*np.pi*f*t)
+    i = Ip*np.sin(2*np.pi*f*t + phi)
+    p = v*i
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=t, y=v, name="v(t)"))
+    fig.add_trace(go.Scatter(x=t, y=i, name="i(t)"))
+    fig.add_trace(go.Scatter(x=t, y=p, name="p(t)=v·i", opacity=0.5))
+    fig.update_layout(template="plotly_white", height=420,
+                      title="시간영역 파형", xaxis_title="t (s)")
+    return fig
+
+def ohm_dc_result(V=None, I=None, R=None):
+    # 세 값 중 1개 비워두면 나머지로 계산
+    if V is None: V = I*R
+    if I is None: I = V/R if R!=0 else float("inf")
+    if R is None: R = V/I if I!=0 else float("inf")
+    P = V*I
+    return V, I, R, P
+
+def series_parallel_req(values):
+    vals = [v for v in values if v>0]
+    if not vals: return 0.0, 0.0
+    r_series = float(np.sum(vals))
+    r_parallel = 1.0 / np.sum([1.0/v for v in vals]) if all(v>0 for v in vals) else float("inf")
+    return r_series, r_parallel
+
+
+
 # ───── 페이지 설정 ─────
 st.set_page_config(page_title="수학 애니메이션 튜터", layout="wide")
 # 탭이 많을 때 가로 스크롤 + 2줄까지 줄바꿈
@@ -72,8 +147,10 @@ st.title("수학 애니메이션 튜터 (Streamlit, Free Plan)")
 tabs = st.tabs([
     "포물선/쌍곡선", "삼각함수", "미분·적분(정의)",
     "선형회귀", "테일러 시리즈", "푸리에 변환",
-    "오일러 공식(애니메이션)", "벡터의 선형결합"
+    "오일러 공식(애니메이션)", "벡터의 선형결합",
+    "기초도구(전기·분수)"          # ← 새로 추가
 ])
+
 
 
 # --------------------- 공통 유틸 ---------------------
@@ -480,6 +557,148 @@ with tabs[7]:
         fig.update_yaxes(scaleanchor="x", scaleratio=1)
 
     st.plotly_chart(fig, use_container_width=True)
+
+
+# ---- 새 탭 콘텐츠 ----
+with tabs[8]:
+    st.subheader("기초도구 (전기 · 분수)")
+    tool = st.radio("도구 선택", ["분수 더하기", "옴의 법칙(DC)", "AC 파형·위상(애니메이션)", "저항 직렬/병렬"], horizontal=True)
+
+    # ---------- 분수 더하기 ----------
+    if tool == "분수 더하기":
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**분수 1**")
+            n1 = st.number_input("분자₁", value=1, step=1)
+            d1 = st.number_input("분모₁(0 제외)", value=2, step=1)
+        with c2:
+            st.markdown("**분수 2**")
+            n2 = st.number_input("분자₂", value=1, step=1)
+            d2 = st.number_input("분모₂(0 제외)", value=3, step=1)
+
+        if d1 == 0 or d2 == 0:
+            st.error("분모는 0이 될 수 없습니다.")
+        else:
+            L = _lcm(d1, d2)
+            n_sum = n1*(L//d1) + n2*(L//d2)
+            n_red, d_red = simplify(n_sum, L)
+            mix = to_mixed(n_red, d_red)
+
+            st.latex(rf"""\frac{{{n1}}}{{{d1}}} + \frac{{{n2}}}{{{d2}}}
+            = \frac{{{n1}\cdot{L//d1}}}{{{L}}} + \frac{{{n2}\cdot{L//d2}}}{{{L}}}
+            = \frac{{{n_sum}}}{{{L}}}
+            = \frac{{{n_red}}}{{{d_red}}}""")
+            if mix:
+                q, r, dd = mix
+                if r==0:
+                    st.markdown(f"**대답:** {q}")
+                else:
+                    st.markdown(f"**대답:** 대분수 **{q} {r}/{dd}** (기약분수 {n_red}/{d_red})")
+
+            # 연습 모드
+            st.divider()
+            st.markdown("#### 🧩 연습 모드")
+            if "frac_q" not in st.session_state:
+                st.session_state.frac_q = (1,2,1,3)
+            if st.button("새 문제 뽑기"):
+                import random
+                st.session_state.frac_q = (
+                    random.randint(-5,5) or 1,
+                    random.randint(1,9),
+                    random.randint(-5,5) or 1,
+                    random.randint(1,9)
+                )
+            a1,b1,a2,b2 = st.session_state.frac_q
+            st.write(f"문제: {a1}/{b1} + {a2}/{b2}")
+            ua = st.text_input("정답(기약분수 형태, 예: 5/6 또는 -7/3)", "")
+            nr, dr = add_fractions(a1,b1,a2,b2)
+            if ua.strip():
+                try:
+                    ss = ua.replace(" ", "")
+                    sn, sd = ss.split("/")
+                    sn, sd = int(sn), int(sd)
+                    sn, sd = simplify(sn, sd)
+                    if (sn,sd)==(nr,dr):
+                        st.success("정답! ✅")
+                    else:
+                        st.error(f"오답 ❌  정답: {nr}/{dr}")
+                except Exception:
+                    st.warning(f"형식이 올바르지 않습니다. 정답: {nr}/{dr}")
+
+    # ---------- 옴의 법칙(DC) ----------
+    elif tool == "옴의 법칙(DC)":
+        st.markdown("**V = I·R**,  **P = V·I**")
+        col = st.columns(3)
+        with col[0]: V = st.number_input("전압 V (Volt)", value=12.0, step=0.5)
+        with col[1]: R = st.number_input("저항 R (Ohm)", value=6.0, step=0.5, min_value=0.0)
+        with col[2]: choose = st.selectbox("고정할 항목", ["V·R로 I 계산", "V·I로 R 계산", "I·R로 V 계산"])
+        I = None
+        if choose == "V·R로 I 계산":
+            V,I,R,P = ohm_dc_result(V=V, R=R, I=None)
+        elif choose == "V·I로 R 계산":
+            I = st.number_input("전류 I (Ampere)", value=1.0, step=0.1)
+            V,I,R,P = ohm_dc_result(V=V, I=I, R=None)
+        else:
+            I = st.number_input("전류 I (Ampere)", value=2.0, step=0.1)
+            V,I,R,P = ohm_dc_result(V=None, I=I, R=R)
+        st.info(f"**I = {I:.3f} A**,  **R = {R:.3f} Ω**,  **V = {V:.3f} V**,  **P = {P:.3f} W**")
+
+    # ---------- AC 파형·위상(애니메이션) ----------
+    elif tool == "AC 파형·위상(애니메이션)":
+        col = st.columns(4)
+        with col[0]: Vrms = st.slider("전압 Vrms (V)", 1.0, 240.0, 220.0, 1.0)
+        with col[1]: Irms = st.slider("전류 Irms (A)", 0.1, 20.0, 5.0, 0.1)
+        with col[2]: f = st.slider("주파수 f (Hz)", 10.0, 120.0, 60.0, 1.0)
+        with col[3]: mode = st.selectbox("부하", ["저항성(R)", "유도성(L)", "용량성(C)", "사용자지정"])
+        if mode=="저항성(R)": phi_deg = 0.0
+        elif mode=="유도성(L)": phi_deg = 90.0
+        elif mode=="용량성(C)": phi_deg = -90.0
+        else: phi_deg = st.slider("위상차 φ (deg, V→I)", -180.0, 180.0, 30.0, 1.0)
+        phi = math.radians(phi_deg)
+        Vp = Vrms*math.sqrt(2); Ip = Irms*math.sqrt(2)
+        PF = math.cos(phi); S = Vrms*Irms; P = S*PF; Q = S*math.sin(phi)
+
+        st.caption(f"PF = cos φ = {PF:.3f},  유효전력 P = {P:.2f} W,  무효전력 Q = {Q:.2f} var,  피상전력 S = {S:.2f} VA")
+
+        # 재생/정지
+        if "ac_play" not in st.session_state: st.session_state.ac_play = False
+        c1, c2 = st.columns([1,1])
+        with c1:
+            if st.button("▶ 재생"): st.session_state.ac_play = True
+        with c2:
+            if st.button("⏸ 정지"): st.session_state.ac_play = False
+
+        left, right = st.columns(2)
+        with left:  phL = st.empty()
+        with right: phR = st.empty()
+
+        if st.session_state.ac_play:
+            secs = 3; fps = 30
+            start = time.perf_counter()
+            for k in range(secs*fps):
+                if not st.session_state.ac_play: break
+                tnow = k/fps
+                # 현재 각도는 표시용 (파형은 별도)
+                phL.plotly_chart(phasor_fig(1.0, 1.0, phi, title=f"Phasor (φ={phi_deg:.1f}°)"), use_container_width=True)
+                phR.plotly_chart(waveform_fig(Vp, Ip, f, phi, dur=2/f), use_container_width=True)
+                sleep = (k+1)/fps - (time.perf_counter()-start)
+                if sleep>0: time.sleep(sleep)
+            st.session_state.ac_play = False
+        else:
+            phL.plotly_chart(phasor_fig(1.0, 1.0, phi, title=f"Phasor (φ={phi_deg:.1f}°)"), use_container_width=True)
+            phR.plotly_chart(waveform_fig(Vp, Ip, f, phi, dur=2/f), use_container_width=True)
+
+    # ---------- 저항 직렬/병렬 ----------
+    else:
+        st.markdown("입력 예: `100, 220, 330` (Ω)")
+        s = st.text_input("저항 값 목록 (콤마 구분)", "100, 220, 330")
+        try:
+            values = [float(x) for x in s.split(",") if x.strip()]
+            rs, rp = series_parallel_req(values)
+            st.info(f"**직렬 합성 Rₛ = {rs:.3f} Ω**,   **병렬 합성 Rₚ = {rp:.3f} Ω**")
+            st.latex(r"R_{\text{series}} = \sum_i R_i \quad,\quad \frac{1}{R_{\text{parallel}}}=\sum_i \frac{1}{R_i}")
+        except Exception:
+            st.error("숫자만 콤마로 입력해주세요.")
 
 st.markdown("---")
 st.caption("이재오에게 저작권이 있으며 개발이나 협업하고자 하시는 관계자는 연락바랍니다")
