@@ -17,7 +17,7 @@ from tabs import (
 
 # 기존 utils에 남아있는 탭
 from utils import tab_vectors as tab_vec_combo   # 벡터 선형결합
-
+from tabs import tab_lincomb3
 # 선택: Manim 탭 존재 시만 노출 (없으면 자동 건너뜀)
 _HAS_MANIM = False
 try:
@@ -42,6 +42,7 @@ TAB_TITLES = [
     "오일러 공식(애니메이션)",
     "벡터의 선형결합",
     "기초도구(전기·분수)",
+    "3D 열벡터 합(연립방정식)"
 ]
 TAB_MODULES = [
     tab_conic,
@@ -53,6 +54,7 @@ TAB_MODULES = [
     tab_euler,
     tab_vec_combo,
     tab_basics,
+    tab_lincomb3
 ]
 
 # Manim 탭이 준비된 경우 리스트에 추가
