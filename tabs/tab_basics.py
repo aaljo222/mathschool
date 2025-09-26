@@ -3,11 +3,27 @@ import streamlit as st
 from utils.frac import add_fractions, simplify, to_mixed, _lcm
 from utils.elec import ohm_dc_result, series_parallel_req
 from utils.plot import phasor_fig, waveform_fig, make_parallel_animation
-
-
+from utils.media import show_gif_cached, show_image, WIX_HEADERS  # ← 추가
+# Basic 탭 전용 이미지 URL (Euler와 다른 것!)
+BASICS_GIF_URL = "https://www.flippingphysics.com/uploads/2/1/1/0/21103672/0350-animated-gif-3-parallel-resistors_orig.gif"  # 예시: 다른 호스팅
+LOCAL_PNG = "public/assets/basics_banner.png"  # 프로젝트에 넣어둔 배너 PNG가 있다면
 # --- 탭 렌더러 ---
 def render():
+    # ▶ Basic 탭만의 이미지
+    # 1) 로컬 파일이 있으면 우선 표기
+    try:
+        show_image(LOCAL_PNG, caption="기초도구 배너")
+    except Exception:
+        pass
 
+    # 2) 원격 GIF를 별도 캐시 파일명/폴더로 관리
+    show_gif_cached(
+        BASICS_GIF_URL,
+        filename="basics_demo.gif",
+        caption="기초도구 데모(GIF, 캐시)",
+        headers=None,  # 일반 GIF면 생략 가능 (필요 시 WIX_HEADERS)
+        subdir="basics"
+    )
     st.subheader("기초도구 (전기 · 분수)")
     tool = st.radio(
         "도구 선택",
