@@ -9,8 +9,43 @@ import plotly.graph_objs as go
 st.set_page_config(page_title="수학 애니메이션 튜터", layout="wide")
 
 # ───── 최초 1회 공지 ─────
-if "notice_shown" not in st.session_state:
-    st.session_state.notice_shown = False
+# ───── 최초 1회 공지 ─────
+if "show_notice" not in st.session_state:
+    st.session_state.show_notice = True   # 첫 방문에만 보여주기
+
+notice_md = """
+### ✨ 업데이트 안내
+- 이 앱은 **매주 새로운 수학 애니메이션**을 추가합니다.
+- 현재는 **중·고등학교 수학**(포물선/쌍곡선, 삼각함수, 미분·적분, 선형회귀, 테일러 시리즈, 푸리에 변환) 위주로 제공됩니다.
+
+### 📬 교육 관계자 연락처
+👉 **[aaljo2@naver.com](mailto:aaljo2@naver.com)**  
+**교육 콘텐츠 개발**·맞춤 커리큘럼 제작을 도와드립니다.
+"""
+
+def _notice_body():
+    st.markdown(notice_md)
+    st.divider()
+    # 고유 key + rerun 이 포인트!
+    if st.button("닫기", key="notice_close_btn", use_container_width=True):
+        st.session_state.show_notice = False
+        try:
+            st.rerun()  # Streamlit ≥ 1.27
+        except Exception:
+            st.experimental_rerun()  # 더 구버전 대비
+
+if st.session_state.show_notice:
+    if hasattr(st, "dialog"):  # Streamlit ≥ 1.36
+        @st.dialog("📢 공지사항")
+        def _notice_dialog():
+            _notice_body()
+        _notice_dialog()
+    elif hasattr(st, "modal"):  # 1.32 ~ 1.35
+        with st.modal("📢 공지사항"):
+            _notice_body()
+    else:  # 더 구버전
+        with st.expander("📢 공지사항", expanded=True):
+            _notice_body()
 
 notice_md = """
 ### ✨ 업데이트 안내
