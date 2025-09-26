@@ -582,96 +582,86 @@ with tabs[7]:
     st.plotly_chart(fig, use_container_width=True)
 
 
-# ---- 새 탭 콘텐츠 ----
 with tabs[8]:
     st.subheader("기초도구 (전기 · 분수)")
-    tool = st.radio("도구 선택", ["분수 더하기", "옴의 법칙(DC)", "AC 파형·위상(애니메이션)", "저항 직렬/병렬"], horizontal=True)
+    tool = st.radio(
+        "도구 선택",
+        ["분수 더하기", "옴의 법칙(DC)", "AC 파형·위상(애니메이션)", "저항 직렬/병렬"],
+        horizontal=True,
+        key="basic_tool"
+    )
 
-    # ---------- 분수 더하기 ----------
-    # ---------- 분수 더하기 ----------
-if tool == "분수 더하기":
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**분수 1**")
-        n1 = st.number_input("분자₁", value=1, step=1, format="%d")
-        d1 = st.number_input("분모₁(0 제외)", value=2, step=1, format="%d")
-    with c2:
-        st.markdown("**분수 2**")
-        n2 = st.number_input("분자₂", value=1, step=1, format="%d")
-        d2 = st.number_input("분모₂(0 제외)", value=3, step=1, format="%d")
+    # ---------- 1) 분수 더하기 ----------
+    if tool == "분수 더하기":
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**분수 1**")
+            n1 = st.number_input("분자₁", value=1, step=1, format="%d")
+            d1 = st.number_input("분모₁(0 제외)", value=2, step=1, format="%d")
+        with c2:
+            st.markdown("**분수 2**")
+            n2 = st.number_input("분자₂", value=1, step=1, format="%d")
+            d2 = st.number_input("분모₂(0 제외)", value=3, step=1, format="%d")
 
-    if d1 == 0 or d2 == 0:
-        st.error("분모는 0이 될 수 없습니다.")
-    else:
-        # 1) 입력 두 분수의 합을 계산(항상 표시)
-        L = _lcm(int(d1), int(d2))
-        n_sum = int(n1)*(L//int(d1)) + int(n2)*(L//int(d2))
-        nr, dr = simplify(n_sum, L)
-        mix = to_mixed(nr, dr)
+        if d1 == 0 or d2 == 0:
+            st.error("분모는 0이 될 수 없습니다.")
+        else:
+            L = _lcm(int(d1), int(d2))
+            n_sum = int(n1)*(L//int(d1)) + int(n2)*(L//int(d2))
+            nr, dr = simplify(n_sum, L)
+            mix = to_mixed(nr, dr)
 
-        st.latex(rf"""\frac{{{n1}}}{{{d1}}} + \frac{{{n2}}}{{{d2}}}
-        = \frac{{{n1}\cdot{L//d1}}}{{{L}}} + \frac{{{n2}\cdot{L//d2}}}{{{L}}}
-        = \frac{{{n_sum}}}{{{L}}}
-        = \frac{{{nr}}}{{{dr}}}""")
-        if mix:
-            q, r, dd = mix
-            if r == 0:
-                st.markdown(f"**대답:** {q}")
-            else:
-                st.markdown(f"**대답:** 대분수 **{q} {r}/{dd}** (기약분수 {nr}/{dr})")
+            st.latex(rf"""\frac{{{n1}}}{{{d1}}} + \frac{{{n2}}}{{{d2}}}
+            = \frac{{{n1}\cdot{L//d1}}}{{{L}}} + \frac{{{n2}\cdot{L//d2}}}{{{L}}}
+            = \frac{{{n_sum}}}{{{L}}}
+            = \frac{{{nr}}}{{{dr}}}""")
+            if mix:
+                q, r, dd = mix
+                st.markdown(f"**대답:** " + (f"{q}" if r==0 else f"대분수 **{q} {r}/{dd}** (기약분수 {nr}/{dr})"))
 
-        st.divider()
-        st.markdown("#### 🧩 연습 모드")
+            st.divider()
+            st.markdown("#### 🧩 연습 모드")
+            if "frac_q" not in st.session_state:
+                st.session_state.frac_q = (1, 2, 1, 3)
+            if st.button("새 문제 뽑기"):
+                import random
+                st.session_state.frac_q = (
+                    random.randint(-5,5) or 1, random.randint(1,9),
+                    random.randint(-5,5) or 1, random.randint(1,9)
+                )
+            a1,b1,a2,b2 = st.session_state.frac_q
+            st.write(f"문제: {a1}/{b1} + {a2}/{b2}")
+            ua = st.text_input("정답(기약분수, 예: 5/6 또는 -7/3)", key="ua_input")
 
-        # 2) 연습 문제 뽑기/채점 (분리!)
-        if "frac_q" not in st.session_state:
-            st.session_state.frac_q = (1, 2, 1, 3)
+            ans_n, ans_d = add_fractions(a1,b1,a2,b2)
+            if ua.strip():
+                try:
+                    sn, sd = map(int, ua.replace(" ","").split("/"))
+                    sn, sd = simplify(sn, sd)
+                    if (sn, sd) == (ans_n, ans_d):
+                        st.success("정답! ✅"); st.balloons()
+                        trigger_modal({
+                            "title": "정답입니다! 🎉",
+                            "body": f"기약분수 **{ans_n}/{ans_d}** 가 맞아요. 멋져요!",
+                            "key": "frac_ok"
+                        })
+                    else:
+                        st.error(f"오답 ❌  정답: {ans_n}/{ans_d}")
+                except Exception:
+                    st.warning(f"형식이 올바르지 않습니다. 정답: {ans_n}/{ans_d}")
 
-        if st.button("새 문제 뽑기"):
-            import random
-            st.session_state.frac_q = (
-                random.randint(-5, 5) or 1,
-                random.randint(1, 9),
-                random.randint(-5, 5) or 1,
-                random.randint(1, 9)
-            )
-
-        a1, b1, a2, b2 = st.session_state.frac_q
-        st.write(f"문제: {a1}/{b1} + {a2}/{b2}")
-        ua = st.text_input("정답(기약분수 형태, 예: 5/6 또는 -7/3)", key="ua_input")
-
-        ans_n, ans_d = add_fractions(a1, b1, a2, b2)
-
-        if ua.strip():
-            try:
-                s = ua.replace(" ", "")
-                sn, sd = map(int, s.split("/"))
-                sn, sd = simplify(sn, sd)
-                if (sn, sd) == (ans_n, ans_d):
-                    st.success("정답! ✅")
-                    st.balloons()
-                    trigger_modal({
-                        "title": "정답입니다! 🎉",
-                        "body": f"기약분수 **{ans_n}/{ans_d}** 가 맞아요. 멋져요!",
-                        "key": "frac_ok"
-                    })
-                else:
-                    st.error(f"오답 ❌  정답: {ans_n}/{ans_d}")
-            except Exception:
-                st.warning(f"형식이 올바르지 않습니다. 정답: {ans_n}/{ans_d}")
-
-
-    # ---------- 옴의 법칙(DC) ----------
+    # ---------- 2) 옴의 법칙(DC) ----------
     elif tool == "옴의 법칙(DC)":
         st.markdown("**V = I·R**,  **P = V·I**")
         col = st.columns(3)
         with col[0]: V = st.number_input("전압 V (Volt)", value=12.0, step=0.5)
         with col[1]: R = st.number_input("저항 R (Ohm)", value=6.0, step=0.5, min_value=0.0)
-        with col[2]: choose = st.selectbox("고정할 항목", ["V·R로 I 계산", "V·I로 R 계산", "I·R로 V 계산"])
+        with col[2]:
+            mode_dc = st.selectbox("고정할 항목", ["V·R로 I 계산", "V·I로 R 계산", "I·R로 V 계산"])
         I = None
-        if choose == "V·R로 I 계산":
+        if mode_dc == "V·R로 I 계산":
             V,I,R,P = ohm_dc_result(V=V, R=R, I=None)
-        elif choose == "V·I로 R 계산":
+        elif mode_dc == "V·I로 R 계산":
             I = st.number_input("전류 I (Ampere)", value=1.0, step=0.1)
             V,I,R,P = ohm_dc_result(V=V, I=I, R=None)
         else:
@@ -679,25 +669,24 @@ if tool == "분수 더하기":
             V,I,R,P = ohm_dc_result(V=None, I=I, R=R)
         st.info(f"**I = {I:.3f} A**,  **R = {R:.3f} Ω**,  **V = {V:.3f} V**,  **P = {P:.3f} W**")
 
-    # ---------- AC 파형·위상(애니메이션) ----------
+    # ---------- 3) AC 파형·위상(애니메이션) ----------
     elif tool == "AC 파형·위상(애니메이션)":
         col = st.columns(4)
         with col[0]: Vrms = st.slider("전압 Vrms (V)", 1.0, 240.0, 220.0, 1.0)
         with col[1]: Irms = st.slider("전류 Irms (A)", 0.1, 20.0, 5.0, 0.1)
         with col[2]: f = st.slider("주파수 f (Hz)", 10.0, 120.0, 60.0, 1.0)
-        with col[3]: mode = st.selectbox("부하", ["저항성(R)", "유도성(L)", "용량성(C)", "사용자지정"])
-        if mode=="저항성(R)": phi_deg = 0.0
-        elif mode=="유도성(L)": phi_deg = 90.0
-        elif mode=="용량성(C)": phi_deg = -90.0
-        else: phi_deg = st.slider("위상차 φ (deg, V→I)", -180.0, 180.0, 30.0, 1.0)
+        with col[3]: load = st.selectbox("부하", ["저항성(R)", "유도성(L)", "용량성(C)", "사용자지정"])
+        if load == "저항성(R)":   phi_deg = 0.0
+        elif load == "유도성(L)": phi_deg = 90.0
+        elif load == "용량성(C)": phi_deg = -90.0
+        else:                     phi_deg = st.slider("위상차 φ (deg, V→I)", -180.0, 180.0, 30.0, 1.0)
+
         phi = math.radians(phi_deg)
         Vp = Vrms*math.sqrt(2); Ip = Irms*math.sqrt(2)
         PF = math.cos(phi); S = Vrms*Irms; P = S*PF; Q = S*math.sin(phi)
-
-
         st.caption(f"PF = cos φ = {PF:.3f},  유효전력 P = {P:.2f} W,  무효전력 Q = {Q:.2f} var,  피상전력 S = {S:.2f} VA")
 
-        # 이벤트: PF 기준 미만이면 1회 경고 모달
+        # 경고 모달 (히스테리시스 포함)
         if PF < 0.80 and not st.session_state.get("pf_warned", False):
             st.session_state["pf_warned"] = True
             trigger_modal({
@@ -706,10 +695,13 @@ if tool == "분수 더하기":
                     f"현재 역률 PF = **{PF:.2f}** (φ={phi_deg:.1f}°) 입니다.\n\n"
                     f"- 유효전력 P ≈ **{P:.1f} W**\n"
                     f"- 무효전력 Q ≈ **{Q:.1f} var**\n"
-                    f"- 목표 PF 0.95로 보상하려면 **콘덴서 보상**(Qc = P·(tanφ₁−tanφ₂))을 검토하세요."
+                    f"- 목표 PF 0.95 보상: Qc = P·(tanφ₁ − tanφ₂)"
                 ),
                 "key": "pf_warn"
             })
+        elif PF >= 0.82 and st.session_state.get("pf_warned", False):
+            st.session_state["pf_warned"] = False
+
         # 재생/정지
         if "ac_play" not in st.session_state: st.session_state.ac_play = False
         c1, c2 = st.columns([1,1])
@@ -727,19 +719,17 @@ if tool == "분수 더하기":
             start = time.perf_counter()
             for k in range(secs*fps):
                 if not st.session_state.ac_play: break
-                tnow = k/fps
-                # 현재 각도는 표시용 (파형은 별도)
                 phL.plotly_chart(phasor_fig(1.0, 1.0, phi, title=f"Phasor (φ={phi_deg:.1f}°)"), use_container_width=True)
                 phR.plotly_chart(waveform_fig(Vp, Ip, f, phi, dur=2/f), use_container_width=True)
-                sleep = (k+1)/fps - (time.perf_counter()-start)
-                if sleep>0: time.sleep(sleep)
+                sleep = (k+1)/fps - (time.perf_counter() - start)
+                if sleep > 0: time.sleep(sleep)
             st.session_state.ac_play = False
         else:
             phL.plotly_chart(phasor_fig(1.0, 1.0, phi, title=f"Phasor (φ={phi_deg:.1f}°)"), use_container_width=True)
             phR.plotly_chart(waveform_fig(Vp, Ip, f, phi, dur=2/f), use_container_width=True)
 
-    # ---------- 저항 직렬/병렬 ----------
-    else:
+    # ---------- 4) 저항 직렬/병렬 ----------
+    elif tool == "저항 직렬/병렬":
         st.markdown("입력 예: `100, 220, 330` (Ω)")
         s = st.text_input("저항 값 목록 (콤마 구분)", "100, 220, 330")
         try:
