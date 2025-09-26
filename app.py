@@ -5,6 +5,7 @@ import numpy as np
 import streamlit as st
 import plotly.graph_objs as go
 import matplotlib.animation as animation
+import matplotlib.pyplot as plt
 
 
 # ───── 페이지 설정 ─────
