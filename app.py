@@ -4,8 +4,7 @@ import time
 import numpy as np
 import streamlit as st
 import plotly.graph_objs as go
-import matplotlib.animation as animation
-import matplotlib.pyplot as plt
+
 
 
 # ───── 페이지 설정 ─────
@@ -52,11 +51,126 @@ if st.session_state.show_notice:
 st.title("수학 애니메이션 튜터 (Streamlit, Free Plan)")
 
 # ───── 탭 구성 ─────
-tabs = st.tabs([
+# ───── 벡터의 선형결합(값 설정 + 애니메이션/수동) ─────
+import numpy as np
+import plotly.graph_objects as go
+import streamlit as st
+
+with st.tabs([
     "포물선/쌍곡선", "삼각함수", "미분·적분(정의)",
     "선형회귀", "테일러 시리즈", "푸리에 변환",
     "오일러 공식(애니메이션)", "벡터의 선형결합"
-])
+])[-1]:
+    st.subheader("벡터의 선형결합:  a·v₁ + b·v₂")
+
+    c1, c2, c3 = st.columns([1,1,1])
+    with c1:
+        st.markdown("**v₁**")
+        v1x = st.number_input("v₁ₓ", value=2.0, step=0.1, key="v1x")
+        v1y = st.number_input("v₁ᵧ", value=1.0, step=0.1, key="v1y")
+    with c2:
+        st.markdown("**v₂**")
+        v2x = st.number_input("v₂ₓ", value=1.0, step=0.1, key="v2x")
+        v2y = st.number_input("v₂ᵧ", value=2.0, step=0.1, key="v2y")
+    with c3:
+        mode = st.radio("모드", ["애니메이션 (a=cos t, b=sin t)", "수동 a,b"], index=0)
+        show_grid = st.checkbox("격자 표시", value=True)
+        keep_ratio = st.checkbox("축 비율 1:1", value=True)
+
+    v1 = np.array([v1x, v1y], dtype=float)
+    v2 = np.array([v2x, v2y], dtype=float)
+
+    # 보기 좋은 축 범위 계산
+    max_len = max(1.0, np.linalg.norm(v1) + np.linalg.norm(v2))
+    pad = 0.5
+    rng = float(np.ceil(max_len + pad))
+    xr = [-rng, rng]
+    yr = [-rng, rng]
+
+    fig = go.Figure()
+
+    if mode.startswith("수동"):
+        a = st.slider("a", -3.0, 3.0, 1.0, 0.1)
+        b = st.slider("b", -3.0, 3.0, 1.0, 0.1)
+        r = a*v1 + b*v2
+
+        # v1, v2, 결과벡터
+        fig.add_trace(go.Scatter(x=[0, v1[0]], y=[0, v1[1]], mode="lines+markers", name="v1"))
+        fig.add_trace(go.Scatter(x=[0, v2[0]], y=[0, v2[1]], mode="lines+markers", name="v2"))
+        fig.add_trace(go.Scatter(x=[0, r[0]],  y=[0, r[1]],  mode="lines+markers", name="a·v1 + b·v2"))
+
+        # 평행사변형(시각화)
+        fig.add_trace(go.Scatter(
+            x=[0, v1[0], r[0], v2[0], 0], y=[0, v1[1], r[1], v2[1], 0],
+            fill="toself", mode="lines", name="parallelogram", showlegend=False, opacity=0.2
+        ))
+
+        fig.update_layout(title=f"a={a:.2f}, b={b:.2f}")
+
+    else:
+        # 애니메이션 설정
+        T = st.slider("프레임 수", 30, 240, 120, 10)
+        speed = st.slider("속도 (ms/프레임)", 10, 200, 40, 5)
+
+        t = np.linspace(0, 2*np.pi, T)
+        a = np.cos(t); b = np.sin(t)
+        res = np.outer(a, v1) + np.outer(b, v2)
+
+        r0 = res[0]
+        fig.add_trace(go.Scatter(x=[0, v1[0]], y=[0, v1[1]], mode="lines+markers", name="v1"))
+        fig.add_trace(go.Scatter(x=[0, v2[0]], y=[0, v2[1]], mode="lines+markers", name="v2"))
+        fig.add_trace(go.Scatter(x=[0, r0[0]], y=[0, r0[1]], mode="lines+markers", name="a·v1 + b·v2"))
+        fig.add_trace(go.Scatter(x=[r0[0]], y=[r0[1]], mode="markers", name="locus", showlegend=False))
+
+        frames = []
+        for i in range(T):
+            rx, ry = res[i]
+            frames.append(go.Frame(
+                data=[
+                    None, None,
+                    go.Scatter(x=[0, rx], y=[0, ry]),
+                    go.Scatter(x=res[:i+1,0], y=res[:i+1,1])
+                ],
+                name=f"t{i}",
+                layout=go.Layout(title=f"a=cos t={a[i]:.2f},  b=sin t={b[i]:.2f}")
+            ))
+        fig.frames = frames
+
+        fig.update_layout(
+            updatemenus=[{
+                "type": "buttons",
+                "buttons": [
+                    {"label": "▶ Play", "method": "animate",
+                     "args": [None, {"frame": {"duration": speed, "redraw": True},
+                                     "fromcurrent": True, "transition": {"duration": 0}}]},
+                    {"label": "⏸ Pause", "method": "animate",
+                     "args": [[None], {"mode": "immediate",
+                                       "frame": {"duration": 0, "redraw": False},
+                                       "transition": {"duration": 0}}]}
+                ],
+                "direction": "left", "x": 0.0, "y": 1.12
+            }],
+            sliders=[{
+                "steps": [{"args": [[f"t{i}"],
+                          {"frame": {"duration": 0, "redraw": True},
+                           "mode": "immediate", "transition": {"duration": 0}}],
+                           "label": f"{i}", "method": "animate"} for i in range(T)],
+                "x": 0.05, "y": 1.04, "len": 0.9
+            }]
+        )
+
+    # 공통 레이아웃
+    fig.update_layout(
+        xaxis=dict(range=xr, showgrid=show_grid, zeroline=True),
+        yaxis=dict(range=yr, showgrid=show_grid, zeroline=True),
+        margin=dict(l=20, r=20, t=60, b=20),
+        legend=dict(bgcolor="rgba(255,255,255,0.6)")
+    )
+    if keep_ratio:
+        fig.update_yaxes(scaleanchor="x", scaleratio=1)
+
+    st.plotly_chart(fig, use_container_width=True)
+
 # --------------------- 공통 유틸 ---------------------
 def line_fig(x, ys, names, title, xaxis="x", yaxis="y"):
     fig = go.Figure()
@@ -346,37 +460,6 @@ with tabs[6]:
         ph_circle.plotly_chart(circle_fig(amp*np.cos(0), amp*np.sin(0)), use_container_width=True)
         ph_wave.plotly_chart(wave_fig(np.array([0.0]), np.array([0.0]), 0.0, 0.0), use_container_width=True)
 # ───── 벡터 선형결합 탭 ─────
-with tabs[7]:
-    st.header("벡터의 선형결합 애니메이션")
 
-    # 두 개의 기본 벡터 정의
-    v1 = np.array([2, 1])
-    v2 = np.array([1, 2])
-
-    fig, ax = plt.subplots()
-    ax.set_xlim(0, 6)
-    ax.set_ylim(0, 6)
-    ax.grid(True)
-    ax.set_aspect('equal')
-
-    # 기본 벡터 그리기
-    ax.quiver(0, 0, v1[0], v1[1], angles='xy', scale_units='xy', scale=1, color='r', label='v1')
-    ax.quiver(0, 0, v2[0], v2[1], angles='xy', scale_units='xy', scale=1, color='b', label='v2')
-
-    result_arrow = ax.quiver(0, 0, 0, 0, angles='xy', scale_units='xy', scale=1, color='g', label='a*v1 + b*v2')
-
-    ax.legend()
-
-    # 애니메이션 업데이트 함수
-    def update(frame):
-        a = np.cos(frame/20)
-        b = np.sin(frame/20)
-        result = a*v1 + b*v2
-        result_arrow.set_UVC(result[0], result[1])
-        return result_arrow,
-
-    ani = animation.FuncAnimation(fig, update, frames=200, interval=100, blit=True)
-
-    st.pyplot(fig)
 st.markdown("---")
 st.caption("이재오에게 저작권이 있으며 개발이나 협업하고자 하시는 관계자는 연락바랍니다")
