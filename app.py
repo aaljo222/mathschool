@@ -4,6 +4,8 @@ import time
 import numpy as np
 import streamlit as st
 import plotly.graph_objs as go
+import matplotlib.animation as animation
+
 
 # ───── 페이지 설정 ─────
 st.set_page_config(page_title="수학 애니메이션 튜터", layout="wide")
@@ -52,9 +54,8 @@ st.title("수학 애니메이션 튜터 (Streamlit, Free Plan)")
 tabs = st.tabs([
     "포물선/쌍곡선", "삼각함수", "미분·적분(정의)",
     "선형회귀", "테일러 시리즈", "푸리에 변환",
-    "오일러 공식(애니메이션)"
+    "오일러 공식(애니메이션)", "벡터의 선형결합"
 ])
-
 # --------------------- 공통 유틸 ---------------------
 def line_fig(x, ys, names, title, xaxis="x", yaxis="y"):
     fig = go.Figure()
@@ -343,6 +344,38 @@ with tabs[6]:
     else:
         ph_circle.plotly_chart(circle_fig(amp*np.cos(0), amp*np.sin(0)), use_container_width=True)
         ph_wave.plotly_chart(wave_fig(np.array([0.0]), np.array([0.0]), 0.0, 0.0), use_container_width=True)
+# ───── 벡터 선형결합 탭 ─────
+with tabs[7]:
+    st.header("벡터의 선형결합 애니메이션")
 
+    # 두 개의 기본 벡터 정의
+    v1 = np.array([2, 1])
+    v2 = np.array([1, 2])
+
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, 6)
+    ax.set_ylim(0, 6)
+    ax.grid(True)
+    ax.set_aspect('equal')
+
+    # 기본 벡터 그리기
+    ax.quiver(0, 0, v1[0], v1[1], angles='xy', scale_units='xy', scale=1, color='r', label='v1')
+    ax.quiver(0, 0, v2[0], v2[1], angles='xy', scale_units='xy', scale=1, color='b', label='v2')
+
+    result_arrow = ax.quiver(0, 0, 0, 0, angles='xy', scale_units='xy', scale=1, color='g', label='a*v1 + b*v2')
+
+    ax.legend()
+
+    # 애니메이션 업데이트 함수
+    def update(frame):
+        a = np.cos(frame/20)
+        b = np.sin(frame/20)
+        result = a*v1 + b*v2
+        result_arrow.set_UVC(result[0], result[1])
+        return result_arrow,
+
+    ani = animation.FuncAnimation(fig, update, frames=200, interval=100, blit=True)
+
+    st.pyplot(fig)
 st.markdown("---")
 st.caption("이재오에게 저작권이 있으며 개발이나 협업하고자 하시는 관계자는 연락바랍니다")
