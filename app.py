@@ -111,7 +111,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── 상단 공지 배너 (항상 표시; 모달 없음) ─────────────────────────────────────
+# ── 상단 공지 배너 (항상 표시) ────────────────────────────────────────────────
 st.markdown(
     """
 <div class="notice">
@@ -535,7 +535,7 @@ with tabs[8]:
                     sn, sd = map(int, ua.replace(" ","").split("/"))
                     sn, sd = simplify(sn, sd)
                     if (sn, sd) == (ans_n, ans_d):
-                        st.success("정답! ✅"); st.balloons()
+                        st.success("정답! ✅")
                     else:
                         st.error(f"오답 ❌  정답: {ans_n}/{ans_d}")
                 except Exception:
