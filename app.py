@@ -1,33 +1,10 @@
+# app.py
 import math, time
 import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
 
-# ── Modal helpers ─────────────────────────────────────────────────────────────
-def open_modal(title: str, body_md: str, key: str = "evt"):
-    """Streamlit 버전에 맞춰 dialog/modal로 열기"""
-    def _content():
-        st.markdown(body_md)
-        c1, c2 = st.columns([1,1])
-        if c1.button("닫기", key=f"{key}_close"):
-            st.session_state[key] = False
-            try: st.rerun()
-            except Exception: st.experimental_rerun()
-
-    if hasattr(st, "dialog"):           # Streamlit >= 1.36
-        @st.dialog(title)
-        def _dlg(): _content()
-        _dlg()
-    elif hasattr(st, "modal"):           # 1.32 ~ 1.35
-        with st.modal(title): _content()
-    else:                                # fallback
-        st.warning(body_md)
-
-def trigger_modal(payload: dict):
-    """어디서든 이벤트마다 호출 → 전역 핸들러가 처리"""
-    st.session_state["__modal_payload__"] = payload
-
-# ---- 유틸: 분수 ----
+# ── 유틸 (수학/전기/그림) ──────────────────────────────────────────────────────
 def _gcd(a:int, b:int)->int:
     a, b = abs(a), abs(b)
     while b: a, b = b, a % b
@@ -44,8 +21,8 @@ def simplify(n:int, d:int):
     return n, d
 
 def add_fractions(n1,d1,n2,d2):
-    L = _lcm(d1, d2)
-    n = n1*(L//d1) + n2*(L//d2)
+    L = _lcm(int(d1), int(d2))
+    n = int(n1)*(L//int(d1)) + int(n2)*(L//int(d2))
     return simplify(n, L)
 
 def to_mixed(n:int, d:int):
@@ -54,17 +31,17 @@ def to_mixed(n:int, d:int):
     sgn = -1 if n<0 else 1
     return sgn*q, r, d  # (정수부, 분자, 분모)
 
-# ---- 유틸: Plotly 그리기 ----
 def phasor_fig(V, I, phi, title="Phasor"):
-    # V: 전압(피크), I: 전류(피크), phi: 위상차(rad, V→I)
-    R = max(V, I) * 1.25 + 0.1
     th = np.linspace(0, 2*np.pi, 360)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=R*np.cos(th)/R, y=R*np.sin(th)/R, mode="lines", name="unit circle", opacity=0.35))
+    fig.add_trace(go.Scatter(x=np.cos(th), y=np.sin(th), mode="lines",
+                             name="unit circle", opacity=0.35))
     fig.add_trace(go.Scatter(x=[0, 1], y=[0, 0], mode="lines+markers", name="V(참조)"))
-    fig.add_trace(go.Scatter(x=[0, math.cos(phi)], y=[0, math.sin(phi)], mode="lines+markers", name="I(위상 이동)"))
+    fig.add_trace(go.Scatter(x=[0, math.cos(phi)], y=[0, math.sin(phi)],
+                             mode="lines+markers", name="I(위상 이동)"))
     lim = 1.3
-    fig.update_xaxes(range=[-lim, lim], zeroline=True); fig.update_yaxes(range=[-lim, lim], scaleanchor="x", scaleratio=1)
+    fig.update_xaxes(range=[-lim, lim], zeroline=True)
+    fig.update_yaxes(range=[-lim, lim], scaleanchor="x", scaleratio=1)
     fig.update_layout(template="plotly_white", title=title, height=420)
     return fig
 
@@ -82,7 +59,6 @@ def waveform_fig(Vp, Ip, f, phi, dur=0.1):
     return fig
 
 def ohm_dc_result(V=None, I=None, R=None):
-    # 세 값 중 1개 비워두면 나머지로 계산
     if V is None: V = I*R
     if I is None: I = V/R if R!=0 else float("inf")
     if R is None: R = V/I if I!=0 else float("inf")
@@ -90,88 +66,12 @@ def ohm_dc_result(V=None, I=None, R=None):
     return V, I, R, P
 
 def series_parallel_req(values):
-    vals = [v for v in values if v>0]
+    vals = [float(v) for v in values if float(v) > 0]
     if not vals: return 0.0, 0.0
     r_series = float(np.sum(vals))
     r_parallel = 1.0 / np.sum([1.0/v for v in vals]) if all(v>0 for v in vals) else float("inf")
     return r_series, r_parallel
 
-
-
-# ───── 페이지 설정 ─────
-st.set_page_config(page_title="수학 애니메이션 튜터", layout="wide")
-# 탭이 많을 때 가로 스크롤 + 2줄까지 줄바꿈
-st.markdown("""
-<style>
-/* 탭 리스트 영역 */
-.stTabs [role="tablist"]{
-  gap: .25rem;
-  overflow-x: auto;         /* 가로 스크롤 */
-  padding: .25rem 0;
-  scrollbar-width: thin;
-  flex-wrap: wrap;          /* 2줄 이상 줄바꿈 허용 */
-}
-/* 각 탭 버튼 */
-.stTabs [role="tab"]{
-  flex: 0 0 auto;           /* 줄바꿈/스크롤 시 폭 고정 */
-  font-size: .95rem;        /* 글자 조금 줄이기 */
-  padding: .35rem .7rem;    /* 패딩 축소 */
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ───── 최초 1회 공지 ─────
-if "show_notice" not in st.session_state:
-    st.session_state.show_notice = True   # 첫 방문에만 보여주기
-
-NOTICE_MD = """
-### ✨ 업데이트 안내
-- 이 앱은 **매주 새로운 수학 애니메이션**을 추가합니다.
-- 현재는 **중·고등학교 수학**(포물선/쌍곡선, 삼각함수, 미분·적분, 선형회귀, 테일러 시리즈, 푸리에 변환) 위주로 제공됩니다.
-
-### 📬 교육 관계자 연락처
-👉 **[aaljo2@naver.com](mailto:aaljo2@naver.com)**  
-**교육 콘텐츠 개발**·맞춤 커리큘럼 제작을 도와드립니다.
-"""
-
-def render_notice_body():
-    st.markdown(NOTICE_MD)
-    st.divider()
-    if st.button("닫기", key="notice_close_btn", use_container_width=True):
-        st.session_state.show_notice = False
-        try:
-            st.rerun()                 # 최신 버전
-        except Exception:
-            st.experimental_rerun()    # 구버전 대응
-
-if st.session_state.show_notice:
-    if hasattr(st, "dialog"):          # Streamlit ≥ 1.36
-        @st.dialog("📢 공지사항")
-        def _notice_dialog():
-            render_notice_body()
-        _notice_dialog()
-    elif hasattr(st, "modal"):         # 1.32 ~ 1.35
-        with st.modal("📢 공지사항"):
-            render_notice_body()
-    else:                              # 더 구버전
-        with st.expander("📢 공지사항", expanded=True):
-            render_notice_body()
-
-# ───── 앱 제목 ─────
-st.title("수학 애니메이션 튜터 (Streamlit, Free Plan)")
-
-
-# ───── 탭 구성 (단 한 번만 선언) ─────
-tabs = st.tabs([
-    "포물선/쌍곡선", "삼각함수", "미분·적분(정의)",
-    "선형회귀", "테일러 시리즈", "푸리에 변환",
-    "오일러 공식(애니메이션)", "벡터의 선형결합",
-    "기초도구(전기·분수)"          # ← 새로 추가
-])
-
-
-
-# --------------------- 공통 유틸 ---------------------
 def line_fig(x, ys, names, title, xaxis="x", yaxis="y"):
     fig = go.Figure()
     for y, name in zip(ys, names):
@@ -195,6 +95,50 @@ def contour_implicit(F, x_range, y_range, level=0.0, title=""):
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
+# ── 페이지 설정 & 스타일 ─────────────────────────────────────────────────────
+st.set_page_config(page_title="수학 애니메이션 튜터", layout="wide")
+
+# 탭이 많을 때 가로 스크롤 + 2줄 줄바꿈
+st.markdown("""
+<style>
+.stTabs [role="tablist"]{gap:.25rem;overflow-x:auto;padding:.25rem 0;scrollbar-width:thin;flex-wrap:wrap;}
+.stTabs [role="tab"]{flex:0 0 auto;font-size:.95rem;padding:.35rem .7rem;}
+.notice{
+  background:#fff8e6;border:1px solid #ffd7a1;border-left:8px solid #ff8b00;
+  padding:12px 16px;border-radius:10px;margin:10px 0 18px 0;
+}
+.notice h3{margin:0 0 6px 0}
+</style>
+""", unsafe_allow_html=True)
+
+# ── 상단 공지 배너 (항상 표시; 모달 없음) ─────────────────────────────────────
+st.markdown(
+    """
+<div class="notice">
+  <h3>📢 교육 콘텐츠 개발 안내</h3>
+  <div style="font-size:0.95rem; line-height:1.55">
+    • 이 앱은 <b>매주 새로운 수학 애니메이션</b>을 추가합니다.<br/>
+    • 중·고등 수학(포물선/쌍곡선, 삼각함수, 미분·적분, 선형회귀, 테일러, 푸리에 등)과 
+      <b>전기 기능사</b> 학습 보조 도구를 제공합니다.<br/>
+    • 맞춤형 <b>교육 콘텐츠 개발</b>·커리큘럼 제작 문의:
+    <a href="mailto:aaljo2@naver.com"><b>aaljo2@naver.com</b></a>
+  </div>
+</div>
+""",
+    unsafe_allow_html=True
+)
+
+# 제목
+st.title("수학 애니메이션 튜터 (Streamlit, Free Plan)")
+
+# ── 탭 ────────────────────────────────────────────────────────────────────────
+tabs = st.tabs([
+    "포물선/쌍곡선", "삼각함수", "미분·적분(정의)",
+    "선형회귀", "테일러 시리즈", "푸리에 변환",
+    "오일러 공식(애니메이션)", "벡터의 선형결합",
+    "기초도구(전기·분수)"
+])
+
 # --------------------- 1) 포물선 / 쌍곡선 ---------------------
 with tabs[0]:
     st.subheader("포물선 / 쌍곡선 시각화 (Implicit Contour)")
@@ -216,7 +160,6 @@ with tabs[0]:
     else:
         F = lambda X, Y: ((X - h)**2)/(a**2) - ((Y - k)**2)/(b**2) - 1
         fig = contour_implicit(F, (x_min, x_max), (y_min, y_max), title="쌍곡선")
-
     st.plotly_chart(fig, use_container_width=True)
 
 # --------------------- 2) 삼각함수 ---------------------
@@ -226,7 +169,6 @@ with tabs[1]:
     with col1: f = st.slider("주파수 f (Hz)", 0.1, 5.0, 1.0, 0.1)
     with col2: A = st.slider("진폭 A", 0.5, 3.0, 1.0, 0.1)
     with col3: phi = st.slider("위상 φ (라디안)", -np.pi, np.pi, 0.0, 0.1)
-
     t = np.linspace(0, 2, 1000)
     y_sin = A*np.sin(2*np.pi*f*t + phi)
     y_cos = A*np.cos(2*np.pi*f*t + phi)
@@ -273,21 +215,13 @@ with tabs[2]:
         exact = Fint(A_int, B_int)
         st.write(f"리만합 ≈ **{approx:.6f}**,  해석적 값 = **{exact:.6f}**,  오차 = **{approx-exact:.6e}**")
     with col4:
-        X = np.linspace(A_int, B_int, 1000)
-        Y = f(X)
+        X = np.linspace(A_int, B_int, 1000); Y = f(X)
         fig_i = go.Figure()
         fig_i.add_trace(go.Scatter(x=X, y=Y, mode="lines", name=f_name))
         for i in range(N):
-            x0, x1 = xs[i], xs[i+1]
-            xm = (x0+x1)/2
-            y = f(xm)
-            fig_i.add_shape(
-                type="rect",
-                x0=x0, x1=x1, y0=0, y1=y,
-                line=dict(width=1),
-                fillcolor="LightSkyBlue",
-                opacity=0.2
-            )
+            x0, x1 = xs[i], xs[i+1]; xm = (x0+x1)/2; y = f(xm)
+            fig_i.add_shape(type="rect", x0=x0, x1=x1, y0=0, y1=y,
+                            line=dict(width=1), fillcolor="LightSkyBlue", opacity=0.2)
         fig_i.update_layout(title="리만 합(중점 규칙)", template="plotly_white")
         st.plotly_chart(fig_i, use_container_width=True)
 
@@ -395,16 +329,12 @@ with tabs[5]:
 # --------------------- 7) 오일러 공식(애니메이션) ---------------------
 with tabs[6]:
     st.subheader("오일러 공식  $e^{i\\omega t} = \\cos(\\omega t) + i\\sin(\\omega t)$  애니메이션")
-
-    # 컨트롤
     c1, c2, c3, c4 = st.columns(4)
     with c1: freq = st.slider("주파수 f (Hz)", 0.1, 5.0, 1.0, 0.1, key="e_freq")
     with c2: amp  = st.slider("진폭 A", 0.5, 2.0, 1.0, 0.1, key="e_amp")
     with c3: secs = st.slider("재생 길이(초)", 1, 10, 5, 1, key="e_secs")
     with c4: fps  = st.slider("FPS", 5, 40, 20, 1, key="e_fps")
-
-    omega = 2*np.pi*freq
-    total_frames = int(secs*fps)
+    omega = 2*np.pi*freq; total_frames = int(secs*fps)
 
     if "euler_play" not in st.session_state: st.session_state.euler_play = False
     b1, b2, _ = st.columns([1,1,6])
@@ -413,7 +343,6 @@ with tabs[6]:
     with b2:
         if st.button("⏹ 정지", key="e_stop"): st.session_state.euler_play = False
 
-    # 좌/우 출력 플레이스홀더 (여기서 key 사용 X)
     left, right = st.columns(2)
     with left:  ph_circle = st.empty()
     with right: ph_wave   = st.empty()
@@ -441,29 +370,25 @@ with tabs[6]:
         return fig
 
     if st.session_state.euler_play:
-        start = time.perf_counter()
-        t_hist, y_hist = [], []
+        start = time.perf_counter(); t_hist, y_hist = [], []
         for frame in range(total_frames):
             if not st.session_state.euler_play: break
             t = frame / fps
             x = amp*np.cos(omega*t); y = amp*np.sin(omega*t)
             t_hist.append(t); y_hist.append(np.sin(omega*t))
-
             ph_circle.plotly_chart(circle_fig(x, y), use_container_width=True)
             ph_wave.plotly_chart(wave_fig(np.array(t_hist), np.array(y_hist), t, y_hist[-1]),
                                  use_container_width=True)
-
             sleep = (frame+1)/fps - (time.perf_counter() - start)
             if sleep > 0: time.sleep(sleep)
         st.session_state.euler_play = False
     else:
         ph_circle.plotly_chart(circle_fig(amp*np.cos(0), amp*np.sin(0)), use_container_width=True)
         ph_wave.plotly_chart(wave_fig(np.array([0.0]), np.array([0.0]), 0.0, 0.0), use_container_width=True)
-# ───── 벡터 선형결합 탭 ─────
+
+# --------------------- 8) 벡터 선형결합 ---------------------
 with tabs[7]:
     st.subheader("벡터의 선형결합:  a·v₁ + b·v₂")
-
-    # 입력 UI
     c1, c2, c3 = st.columns([1,1,1])
     with c1:
         st.markdown("**v₁**")
@@ -481,7 +406,6 @@ with tabs[7]:
     v1 = np.array([v1x, v1y], dtype=float)
     v2 = np.array([v2x, v2y], dtype=float)
 
-    # 축 범위
     max_len = max(1.0, float(np.linalg.norm(v1) + np.linalg.norm(v2)))
     rng = float(np.ceil(max_len + 0.5))
     xr, yr = [-rng, rng], [-rng, rng]
@@ -493,53 +417,36 @@ with tabs[7]:
         b = st.slider("b", -3.0, 3.0, 1.0, 0.1)
         r = (a*v1 + b*v2).astype(float)
 
-        # 초기 4 traces (v1, v2, result, locus)
         fig.add_trace(go.Scatter(x=[0, v1[0]], y=[0, v1[1]], mode="lines+markers", name="v1"))
         fig.add_trace(go.Scatter(x=[0, v2[0]], y=[0, v2[1]], mode="lines+markers", name="v2"))
         fig.add_trace(go.Scatter(x=[0, r[0]],  y=[0, r[1]],  mode="lines+markers", name="a·v1 + b·v2"))
         fig.add_trace(go.Scatter(x=[r[0]], y=[r[1]], mode="markers", name="locus", showlegend=False))
-
-        # 평행사변형
-        fig.add_trace(go.Scatter(
-            x=[0, v1[0], r[0], v2[0], 0], y=[0, v1[1], r[1], v2[1], 0],
-            fill="toself", mode="lines", name="parallelogram", showlegend=False, opacity=0.2
-        ))
-
+        fig.add_trace(go.Scatter(x=[0, v1[0], r[0], v2[0], 0], y=[0, v1[1], r[1], v2[1], 0],
+                                 fill="toself", mode="lines", name="parallelogram",
+                                 showlegend=False, opacity=0.2))
         fig.update_layout(title=f"a={a:.2f}, b={b:.2f}")
 
     else:
-        # 애니메이션 안전 구성: 초기 4 traces + 각 frame에도 4개 항목 보장
         T = st.slider("프레임 수", 30, 240, 120, 10)
         speed = st.slider("속도 (ms/프레임)", 10, 200, 40, 5)
-
-        t = np.linspace(0, 2*np.pi, int(T))
-        a = np.cos(t); b = np.sin(t)
+        t = np.linspace(0, 2*np.pi, int(T)); a = np.cos(t); b = np.sin(t)
         res = (np.outer(a, v1) + np.outer(b, v2)).astype(float)
-
         r0 = res[0]
         fig.add_trace(go.Scatter(x=[0, v1[0]], y=[0, v1[1]], mode="lines+markers", name="v1"))
         fig.add_trace(go.Scatter(x=[0, v2[0]], y=[0, v2[1]], mode="lines+markers", name="v2"))
         fig.add_trace(go.Scatter(x=[0, r0[0]], y=[0, r0[1]], mode="lines+markers", name="a·v1 + b·v2"))
         fig.add_trace(go.Scatter(x=[r0[0]], y=[r0[1]], mode="markers", name="locus", showlegend=False))
-
         frames = []
         for i in range(int(T)):
             rx, ry = float(res[i,0]), float(res[i,1])
-            # numpy → list 변환으로 직렬화 안전성 확보
-            locus_x = res[:i+1, 0].tolist()
-            locus_y = res[:i+1, 1].tolist()
             frames.append(go.Frame(
-                data=[
-                    go.Scatter(),                              # v1 (변화 없음)
-                    go.Scatter(),                              # v2 (변화 없음)
-                    go.Scatter(x=[0, rx], y=[0, ry]),          # result
-                    go.Scatter(x=locus_x, y=locus_y)           # locus
-                ],
+                data=[go.Scatter(), go.Scatter(),
+                      go.Scatter(x=[0, rx], y=[0, ry]),
+                      go.Scatter(x=res[:i+1,0].tolist(), y=res[:i+1,1].tolist())],
                 name=f"t{i}",
                 layout=go.Layout(title=f"a=cos t={a[i]:.2f},  b=sin t={b[i]:.2f}")
             ))
         fig.frames = frames
-
         fig.update_layout(
             updatemenus=[{
                 "type": "buttons",
@@ -557,41 +464,29 @@ with tabs[7]:
             sliders=[{
                 "steps": [{"args": [[f"t{i}"],
                                      {"frame": {"duration": 0, "redraw": True},
-                                      "mode": "immediate",
-                                      "transition": {"duration": 0}}],
+                                      "mode": "immediate","transition": {"duration": 0}}],
                            "label": f"{i}", "method": "animate"} for i in range(int(T))],
                 "x": 0.05, "y": 1.04, "len": 0.9
             }]
         )
 
-    # 공통 레이아웃
     fig.update_layout(
         xaxis=dict(range=xr, showgrid=show_grid, zeroline=True),
         yaxis=dict(range=yr, showgrid=show_grid, zeroline=True),
         margin=dict(l=20, r=20, t=60, b=20),
         legend=dict(bgcolor="rgba(255,255,255,0.6)")
     )
-    if keep_ratio:
-        fig.update_yaxes(scaleanchor="x", scaleratio=1)
-
+    if keep_ratio: fig.update_yaxes(scaleanchor="x", scaleratio=1)
     st.plotly_chart(fig, use_container_width=True)
 
-
+# --------------------- 9) 기초도구(전기·분수) ---------------------
 with tabs[8]:
     st.subheader("기초도구 (전기 · 분수)")
-    tool = st.radio(
-        "도구 선택",
+    tool = st.radio("도구 선택",
         ["분수 더하기", "옴의 법칙(DC)", "AC 파형·위상(애니메이션)", "저항 직렬/병렬"],
-        horizontal=True,
-        key="basic_tool"
-    )
-    # 메뉴 전환 시 깨끗하게 초기화
-    if st.session_state.get("current_tool") != tool:
-        st.session_state["current_tool"] = tool
-        st.session_state.pop("__modal_payload__", None)  # 대기 모달 삭제
-        st.session_state.pop("pf_warned", None)          # 역률 경고 플래그 리셋
+        horizontal=True, key="basic_tool")
 
-    # ---------- 1) 분수 더하기 ----------
+    # 분수 더하기
     if tool == "분수 더하기":
         c1, c2 = st.columns(2)
         with c1:
@@ -617,7 +512,7 @@ with tabs[8]:
             = \frac{{{nr}}}{{{dr}}}""")
             if mix:
                 q, r, dd = mix
-                st.markdown(f"**대답:** " + (f"{q}" if r==0 else f"대분수 **{q} {r}/{dd}** (기약분수 {nr}/{dr})"))
+                st.markdown("**대답:** " + (f"{q}" if r==0 else f"대분수 **{q} {r}/{dd}** (기약분수 {nr}/{dr})"))
 
             st.divider()
             st.markdown("#### 🧩 연습 모드")
@@ -629,16 +524,24 @@ with tabs[8]:
                     random.randint(-5,5) or 1, random.randint(1,9),
                     random.randint(-5,5) or 1, random.randint(1,9)
                 )
-                st.session_state.pop("frac_ok_shown", None)   # ← 정답 모달 표시 여부 리셋
 
             a1,b1,a2,b2 = st.session_state.frac_q
             st.write(f"문제: {a1}/{b1} + {a2}/{b2}")
             ua = st.text_input("정답(기약분수, 예: 5/6 또는 -7/3)", key="ua_input")
 
             ans_n, ans_d = add_fractions(a1,b1,a2,b2)
-           
+            if ua.strip():
+                try:
+                    sn, sd = map(int, ua.replace(" ","").split("/"))
+                    sn, sd = simplify(sn, sd)
+                    if (sn, sd) == (ans_n, ans_d):
+                        st.success("정답! ✅"); st.balloons()
+                    else:
+                        st.error(f"오답 ❌  정답: {ans_n}/{ans_d}")
+                except Exception:
+                    st.warning(f"형식이 올바르지 않습니다. 정답: {ans_n}/{ans_d}")
 
-    # ---------- 2) 옴의 법칙(DC) ----------
+    # 옴의 법칙(DC)
     elif tool == "옴의 법칙(DC)":
         st.markdown("**V = I·R**,  **P = V·I**")
         col = st.columns(3)
@@ -657,7 +560,7 @@ with tabs[8]:
             V,I,R,P = ohm_dc_result(V=None, I=I, R=R)
         st.info(f"**I = {I:.3f} A**,  **R = {R:.3f} Ω**,  **V = {V:.3f} V**,  **P = {P:.3f} W**")
 
-    # ---------- 3) AC 파형·위상(애니메이션) ----------
+    # AC 파형·위상
     elif tool == "AC 파형·위상(애니메이션)":
         col = st.columns(4)
         with col[0]: Vrms = st.slider("전압 Vrms (V)", 1.0, 240.0, 220.0, 1.0)
@@ -673,24 +576,9 @@ with tabs[8]:
         Vp = Vrms*math.sqrt(2); Ip = Irms*math.sqrt(2)
         PF = math.cos(phi); S = Vrms*Irms; P = S*PF; Q = S*math.sin(phi)
         st.caption(f"PF = cos φ = {PF:.3f},  유효전력 P = {P:.2f} W,  무효전력 Q = {Q:.2f} var,  피상전력 S = {S:.2f} VA")
+        if PF < 0.80:
+            st.warning("역률 PF가 0.80 미만입니다. 콘덴서 보상(Qc = P·(tanφ₁ − tanφ₂))을 검토하세요.")
 
-        # 경고 모달 (히스테리시스 포함)
-        if PF < 0.80 and not st.session_state.get("pf_warned", False):
-            st.session_state["pf_warned"] = True
-            trigger_modal({
-                "title": "역률 경고 ⚡",
-                "body": (
-                    f"현재 역률 PF = **{PF:.2f}** (φ={phi_deg:.1f}°) 입니다.\n\n"
-                    f"- 유효전력 P ≈ **{P:.1f} W**\n"
-                    f"- 무효전력 Q ≈ **{Q:.1f} var**\n"
-                    f"- 목표 PF 0.95 보상: Qc = P·(tanφ₁ − tanφ₂)"
-                ),
-                "key": "pf_warn"
-            })
-        elif PF >= 0.82 and st.session_state.get("pf_warned", False):
-            st.session_state["pf_warned"] = False
-
-        # 재생/정지
         if "ac_play" not in st.session_state: st.session_state.ac_play = False
         c1, c2 = st.columns([1,1])
         with c1:
@@ -716,7 +604,7 @@ with tabs[8]:
             phL.plotly_chart(phasor_fig(1.0, 1.0, phi, title=f"Phasor (φ={phi_deg:.1f}°)"), use_container_width=True)
             phR.plotly_chart(waveform_fig(Vp, Ip, f, phi, dur=2/f), use_container_width=True)
 
-    # ---------- 4) 저항 직렬/병렬 ----------
+    # 저항 직렬/병렬
     elif tool == "저항 직렬/병렬":
         st.markdown("입력 예: `100, 220, 330` (Ω)")
         s = st.text_input("저항 값 목록 (콤마 구분)", "100, 220, 330")
@@ -728,13 +616,6 @@ with tabs[8]:
         except Exception:
             st.error("숫자만 콤마로 입력해주세요.")
 
+# 푸터
 st.markdown("---")
 st.caption("이재오에게 저작권이 있으며 개발이나 협업하고자 하시는 관계자는 연락바랍니다")
-# ── Global modal dispatcher (run once at end) ─────────────────────────────────
-# ── Global modal dispatcher (run once at end) ─────────────────
-payload = st.session_state.pop("__modal_payload__", None)  # ← get() 대신 pop()
-if payload:
-    open_modal(payload.get("title", "알림"),
-               payload.get("body", ""),
-               key=payload.get("key", "evt"))
-
