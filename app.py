@@ -94,6 +94,109 @@ def contour_implicit(F, x_range, y_range, level=0.0, title=""):
     fig.update_layout(title=title, xaxis_title="x", yaxis_title="y", template="plotly_white")
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
+def make_parallel_animation(Rs, V, seconds=5, fps=30):
+    """
+    Rs: list[float]  병렬 저항들 (Ω)
+    V : float        공급 전압 (V, DC)
+    seconds, fps     애니메이션 길이와 프레임
+    """
+    import numpy as np
+    import plotly.graph_objects as go
+    import math
+
+    Rs = [float(r) for r in Rs if float(r) > 0]
+    N = len(Rs)
+    if N == 0:
+        return go.Figure()
+
+    # ── 전류/합성저항 계산
+    I_each = [V/r for r in Rs]                   # 각 가지 전류
+    I_tot  = float(sum(I_each))                  # 전체 전류 (KCL)
+    Req    = 1.0 / float(sum(1.0/r for r in Rs)) # 합성저항
+    P_each = [V*i for i in I_each]               # 각 가지 전력
+
+    # ── 배선 좌표계
+    xL, xR = 1.0, 9.0          # 좌/우 버스바 x
+    x1, x2 = 2.0, 8.0          # 가지 (저항) 구간 x
+    ys     = np.linspace(N-1, 0, N)  # 가지 y (위에서 아래)
+    ylim   = (-0.8, N-0.2)
+
+    # ── 기본 도면 (정지 요소)
+    fig = go.Figure()
+
+    # 좌/우 버스바
+    fig.add_trace(go.Scatter(x=[xL, xL], y=[ylim[0], ylim[1]], mode="lines",
+                             line=dict(width=3), name="Bus(+)", showlegend=False))
+    fig.add_trace(go.Scatter(x=[xR, xR], y=[ylim[0], ylim[1]], mode="lines",
+                             line=dict(width=3), name="Bus(-)", showlegend=False))
+
+    # 각 가지 배선(선 두께는 전류 비례)
+    Imax = max(I_each) if I_each else 1.0
+    for k, y in enumerate(ys):
+        lw = 2 + 6*(I_each[k]/Imax)   # 전류 비례 선두께
+        # 가지 라인
+        fig.add_trace(go.Scatter(x=[xL, x1, x2, xR], y=[y, y, y, y],
+                                 mode="lines", line=dict(width=lw),
+                                 name=f"R{k+1}", showlegend=False))
+    # 움직이는 전하(점)용 trace N개(초기값)
+    for k, y in enumerate(ys):
+        fig.add_trace(go.Scatter(x=[x1], y=[y], mode="markers",
+                                 marker=dict(size=10), name=f"I{k+1}",
+                                 showlegend=False))
+
+    # ── 프레임(점의 x 위치만 갱신, 속도는 전류 비례)
+    T = int(seconds*fps)
+    speeds = [max(0.05, i/Imax) for i in I_each]  # 최소속도 보호
+    frames = []
+    for t in range(T):
+        data = [go.Scatter() for _ in range(2+N)]  # 정지 trace 자리 맞춤(버스바2 + 가지N)
+        # 움직이는 점 N개
+        for k, y in enumerate(ys):
+            s = ((t/fps) * speeds[k]) % 1.0
+            x = x1 + (x2-x1)*s
+            data.append(go.Scatter(x=[x], y=[y]))
+        frames.append(go.Frame(data=data, name=f"f{t}"))
+    fig.frames = frames
+
+    # ── 재생 버튼 & 슬라이더
+    fig.update_layout(
+        updatemenus=[{
+            "type":"buttons",
+            "buttons":[
+                {"label":"▶ Play","method":"animate",
+                 "args":[None,{"frame":{"duration":int(1000/fps),"redraw":True},
+                               "fromcurrent":True,"transition":{"duration":0}}]},
+                {"label":"⏸ Pause","method":"animate",
+                 "args":[[None],{"mode":"immediate",
+                                 "frame":{"duration":0,"redraw":False},
+                                 "transition":{"duration":0}}]}
+            ],
+            "direction":"left","x":0.0,"y":1.08
+        }],
+        sliders=[{
+            "steps":[{"args":[[f"f{t}"],{"frame":{"duration":0,"redraw":True},
+                                         "mode":"immediate","transition":{"duration":0}}],
+                      "label":f"{t}","method":"animate"} for t in range(T)],
+            "x":0.05,"y":1.02,"len":0.9
+        }],
+        xaxis=dict(range=[0,10], zeroline=False, showgrid=False),
+        yaxis=dict(range=list(ylim), zeroline=False, showgrid=False, scaleanchor="x", scaleratio=1),
+        template="plotly_white",
+        margin=dict(l=20,r=20,t=60,b=20),
+        title=f"병렬 저항 애니메이션 (V = {V} V,  Req = {Req:.3f} Ω,  Itot = {I_tot:.3f} A)"
+    )
+
+    # 가지 라벨(저항, 전류)
+    annotations = []
+    for k, y in enumerate(ys):
+        annotations += [
+            dict(x=(x1+x2)/2, y=y+0.22, text=f"R{k+1} = {Rs[k]:.3f} Ω",
+                 showarrow=False, font=dict(size=12)),
+            dict(x=(x1+x2)/2, y=y-0.22, text=f"I{k+1} = {I_each[k]:.3f} A",
+                 showarrow=False, font=dict(size=12, color="#1f77b4"))
+        ]
+    fig.update_layout(annotations=annotations)
+    return fig
 
 # ── 페이지 설정 & 스타일 ─────────────────────────────────────────────────────
 st.set_page_config(page_title="수학 애니메이션 튜터", layout="wide")
@@ -482,9 +585,12 @@ with tabs[7]:
 # --------------------- 9) 기초도구(전기·분수) ---------------------
 with tabs[8]:
     st.subheader("기초도구 (전기 · 분수)")
-    tool = st.radio("도구 선택",
-        ["분수 더하기", "옴의 법칙(DC)", "AC 파형·위상(애니메이션)", "저항 직렬/병렬"],
-        horizontal=True, key="basic_tool")
+    tool = st.radio(
+        "도구 선택",
+        ["분수 더하기", "옴의 법칙(DC)", "AC 파형·위상(애니메이션)", "저항 직렬/병렬", "병렬 저항(애니메이션)"],
+        horizontal=True,
+        key="basic_tool"
+    )
 
     # 분수 더하기
     if tool == "분수 더하기":
@@ -615,6 +721,56 @@ with tabs[8]:
             st.latex(r"R_{\text{series}} = \sum_i R_i \quad,\quad \frac{1}{R_{\text{parallel}}}=\sum_i \frac{1}{R_i}")
         except Exception:
             st.error("숫자만 콤마로 입력해주세요.")
+    elif tool == "병렬 저항(애니메이션)":
+        st.markdown("DC 병렬 회로에서 **모든 가지의 전압은 동일**하고, 전류는 **각 저항에 반비례**하여 나뉩니다.")
+        col = st.columns([1, 1, 1])
+        with col[0]:
+            V = st.number_input("공급 전압 V (Volt)", value=12.0, step=0.5, min_value=0.0)
+        with col[1]:
+            s_R = st.text_input("저항 목록 R (Ω, 콤마로)", "100, 220, 330")
+        with col[2]:
+            secs = st.slider("길이(초)", 2, 10, 5)
+            fps = st.slider("FPS", 10, 40, 20)
+
+        # 파싱
+        try:
+            Rs = [float(x) for x in s_R.split(",") if x.strip()]
+            if len(Rs) == 0:
+                st.warning("저항을 1개 이상 입력하세요.")
+            else:
+                # 계산
+                I_each = [V / r for r in Rs]
+                I_tot = sum(I_each)
+                Req = 1.0 / sum(1.0 / r for r in Rs)
+
+                # 표로 요약
+                rows = [{"가지": f"{i + 1}", "R (Ω)": f"{Rs[i]:.3f}", "I (A)": f"{I_each[i]:.3f}",
+                         "P = VI (W)": f"{(V * I_each[i]):.3f}"}
+                        for i in range(len(Rs))]
+                st.table(rows)
+                st.info(f"합성저항 **Req = {Req:.3f} Ω**,  전체전류 **I_total = {I_tot:.3f} A** (검산: I_total = V/Req)")
+
+                # 애니메이션
+                fig = make_parallel_animation(Rs, V, seconds=secs, fps=fps)
+                st.plotly_chart(fig, use_container_width=True)
+
+                # 계산 과정 설명
+                st.markdown("""
+                    **계산 과정 요약**
+                
+                    1) 병렬에서 가지 전압은 모두 동일:  \\(V_1 = V_2 = \\cdots = V\\).  
+                    2) 각 가지 전류:  \\( I_i = \\dfrac{V}{R_i} \\).  
+                    3) 키르히호프 전류법칙(KCL):  \\( I_{\\text{total}} = \\sum_i I_i \\).  
+                    4) 합성저항:  
+                    \\[
+                    \\frac{1}{R_{\\mathrm{eq}}} = \\sum_i \\frac{1}{R_i}
+                    \\quad\\Rightarrow\\quad
+                    R_{\\mathrm{eq}} = \\frac{1}{\\sum_i \\frac{1}{R_i}}
+                    \\]
+                    5) 검산:  \\( I_{\\text{total}} = \\dfrac{V}{R_{\\mathrm{eq}}} \\) 가 2)~3)로 구한 합과 일치해야 합니다.
+                    """)
+        except Exception:
+            st.error("입력 형식을 확인하세요. 예: 100, 220, 330")
 
 # 푸터
 st.markdown("---")
