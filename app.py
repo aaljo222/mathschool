@@ -1,13 +1,8 @@
-# app.py
-import math
-import time
+import math, time
 import numpy as np
 import streamlit as st
-import plotly.graph_objs as go
-
-import numpy as np, math, time
 import plotly.graph_objects as go
-import streamlit as st
+
 # ── Modal helpers ─────────────────────────────────────────────────────────────
 def open_modal(title: str, body_md: str, key: str = "evt"):
     """Streamlit 버전에 맞춰 dialog/modal로 열기"""
@@ -590,6 +585,11 @@ with tabs[8]:
         horizontal=True,
         key="basic_tool"
     )
+    # 메뉴 전환 시 깨끗하게 초기화
+    if st.session_state.get("current_tool") != tool:
+        st.session_state["current_tool"] = tool
+        st.session_state.pop("__modal_payload__", None)  # 대기 모달 삭제
+        st.session_state.pop("pf_warned", None)          # 역률 경고 플래그 리셋
 
     # ---------- 1) 분수 더하기 ----------
     if tool == "분수 더하기":
@@ -629,12 +629,30 @@ with tabs[8]:
                     random.randint(-5,5) or 1, random.randint(1,9),
                     random.randint(-5,5) or 1, random.randint(1,9)
                 )
+                st.session_state.pop("frac_ok_shown", None)   # ← 정답 모달 표시 여부 리셋
+
             a1,b1,a2,b2 = st.session_state.frac_q
             st.write(f"문제: {a1}/{b1} + {a2}/{b2}")
             ua = st.text_input("정답(기약분수, 예: 5/6 또는 -7/3)", key="ua_input")
 
             ans_n, ans_d = add_fractions(a1,b1,a2,b2)
-            
+            if ua.strip():
+                try:
+                    sn, sd = map(int, ua.replace(" ", "").split("/"))
+                    sn, sd = simplify(sn, sd)
+                    if (sn, sd) == (ans_n, ans_d):
+                        st.success("정답! ✅"); st.balloons()
+                        if not st.session_state.get("frac_ok_shown", False):   # ← 추가
+                            trigger_modal({
+                                "title": "정답입니다! 🎉",
+                                "body": f"기약분수 **{ans_n}/{ans_d}** 가 맞아요. 멋져요!",
+                                "key": "frac_ok"
+                            })
+                            st.session_state["frac_ok_shown"] = True          # ← 추가
+                    else:
+                        st.error(f"오답 ❌  정답: {ans_n}/{ans_d}")
+                except Exception:
+                    st.warning(f"형식이 올바르지 않습니다. 정답: {ans_n}/{ans_d}")
 
     # ---------- 2) 옴의 법칙(DC) ----------
     elif tool == "옴의 법칙(DC)":
@@ -729,7 +747,10 @@ with tabs[8]:
 st.markdown("---")
 st.caption("이재오에게 저작권이 있으며 개발이나 협업하고자 하시는 관계자는 연락바랍니다")
 # ── Global modal dispatcher (run once at end) ─────────────────────────────────
-payload = st.session_state.get("__modal_payload__")
+# ── Global modal dispatcher (run once at end) ─────────────────
+payload = st.session_state.pop("__modal_payload__", None)  # ← get() 대신 pop()
 if payload:
-    open_modal(payload.get("title", "알림"), payload.get("body", ""), key=payload.get("key","evt"))
-    st.session_state["__modal_payload__"] = None
+    open_modal(payload.get("title", "알림"),
+               payload.get("body", ""),
+               key=payload.get("key", "evt"))
+
