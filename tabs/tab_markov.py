@@ -1,47 +1,57 @@
+# tabs/tab_markov.py
 import numpy as np, streamlit as st, plotly.graph_objects as go
 from utils.anim import playbar, step_loop
 
-PFX = "markov3"
+PFX = "markov"  # 이 탭만의 고유 접두사
 
 def render():
-    st.subheader("3상태 마르코프 체인의 분포 수렴")
+    st.subheader("마르코프 체인: 분포의 시간 전개")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        alpha = st.slider("머무를 확률 α", 0.0, 1.0, 0.5, 0.01, key=f"{PFX}:alpha")
-        beta  = st.slider("시작 분포 b=(b1,b2,b3)", 0.0, 1.0, 0.33, 0.01, key=f"{PFX}:b1")
-        b     = np.array([beta, (1-beta)/2, (1-beta)/2])
-    with col2:
-        secs = st.slider("길이(초)", 1, 12, 6, key=f"{PFX}:secs")
-        fps  = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
+    # 예시 전이행렬(3상태) 입력
+    c = st.columns(3)
+    r1 = [c[0].slider("p11", 0.0, 1.0, 0.7, 0.01, key=f"{PFX}:p11"),
+          c[1].slider("p12", 0.0, 1.0, 0.2, 0.01, key=f"{PFX}:p12"),
+          c[2].slider("p13", 0.0, 1.0, 0.1, 0.01, key=f"{PFX}:p13")]
+    c = st.columns(3)
+    r2 = [c[0].slider("p21", 0.0, 1.0, 0.1, 0.01, key=f"{PFX}:p21"),
+          c[1].slider("p22", 0.0, 1.0, 0.8, 0.01, key=f"{PFX}:p22"),
+          c[2].slider("p23", 0.0, 1.0, 0.1, 0.01, key=f"{PFX}:p23")]
+    c = st.columns(3)
+    r3 = [c[0].slider("p31", 0.0, 1.0, 0.2, 0.01, key=f"{PFX}:p31"),
+          c[1].slider("p32", 0.0, 1.0, 0.2, 0.01, key=f"{PFX}:p32"),
+          c[2].slider("p33", 0.0, 1.0, 0.6, 0.01, key=f"{PFX}:p33")]
 
-    # i→i: α, i→(i+1 mod 3): 1-α
-    T = np.array([[alpha, 1-alpha, 0],
-                  [0,     alpha,  1-alpha],
-                  [1-alpha, 0,    alpha]], float)
+    def _norm(row):
+        s = sum(row) or 1.0
+        return [x/s for x in row]
 
-    playing = playbar(PFX)
+    P = np.array([_norm(r1), _norm(r2), _norm(r3)])
+    pi0 = np.array([1.0, 0.0, 0.0])  # 초기분포
 
-    # ⬇️ 루프에서 갱신하는 모든 출력은 placeholder 사용
-    chart_ph = st.empty()
-    text_ph  = st.empty()
+    left, right = st.columns(2)
+    with left:
+        steps = st.slider("스텝 수", 2, 60, 20, key=f"{PFX}:steps")
+    with right:
+        fps   = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
 
-    steps   = max(2, int(secs*fps))
+    playing = playbar(PFX)  # ▶ / ⏸ 버튼 (키는 PFX로)
 
-    def draw(t):
-        k = int(t*(steps-1))
-        p = b @ np.linalg.matrix_power(T, k)
-        fig = go.Figure(go.Bar(x=["A","B","C"], y=p,
-                               marker_color=["#e67e22","#27ae60","#2980b9"]))
-        fig.update_yaxes(range=[0,1])
-        fig.update_layout(template="plotly_white", height=420,
-                          title=f"분포 p_k (k={k})", bargap=0.25)
-        chart_ph.plotly_chart(fig, use_container_width=True)
+    ph = st.empty()  # ← 반드시 1개의 placeholder만 사용
 
-        text_ph.caption("T = " + str(T.round(3).tolist()))
+    def draw(k: int):
+        dist = pi0 @ np.linalg.matrix_power(P, k)
+        fig = go.Figure()
+        fig.add_bar(x=[f"s{i+1}" for i in range(3)], y=dist, name=f"k={k}")
+        fig.update_layout(template="plotly_white",
+                          yaxis=dict(range=[0, 1]),
+                          title=f"분포 π_k (k={k})")
+        ph.plotly_chart(fig, use_container_width=True)
 
     if playing:
-        for i in step_loop(steps, fps=fps, key=PFX):
-            draw(i/(steps-1))
+        # 같은 run 안에서 같은 자리의 차트를 중복 생성하지 않도록
+        for k in step_loop(steps + 1, fps=fps, key=PFX):
+            ph.empty()     # ← 먼저 비우고
+            draw(k)        # ← 한 번만 그린다
     else:
-        draw(0.0)
+        ph.empty()
+        draw(steps)        # 일시정지일 때는 1회만 그림
