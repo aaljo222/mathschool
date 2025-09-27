@@ -65,7 +65,7 @@ def _make_fig(a, x_now, view_L, n=400):
     fig.update_layout(
         template="plotly_white",
         height=520,
-        margin=dict(l=10,r=10,t=40,b=10),
+        margin=dict(l=10, r=10, t=40, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         title=f"역함수 쌍대:  y = a^x  ↔  y = logₐ x   (a = {a:.2f})"
     )
@@ -91,9 +91,9 @@ def render():
         view_L = st.slider("보기 범위 L", 1.5, 6.0, 3.0, 0.5,
                            help="축을 [-L, L]로 고정 (y=x 대칭을 뚜렷하게)")
     with c3:
-        secs = st.slider("길이(초)", 2, 12, 6)
+        secs = st.slider("애니메이션 길이(초)", 1, 12, 4)
     with c4:
-        fps  = st.slider("FPS", 10, 40, 24)
+        fps  = st.slider("FPS", 5, 40, 20)
 
     st.latex(r"""
     \textbf{핵심 관계}\quad
@@ -101,38 +101,27 @@ def render():
     \log_a x = \frac{\ln x}{\ln a}\ (a>0,\ a\neq 1).
     """)
 
-    # 수동 포인터 + 재생 컨트롤
-    c5, c6 = st.columns([1,1])
-    with c5:
-        x_now = st.slider("x 포인터", -view_L, view_L, 0.0, 0.05)
-    with c6:
-        play_col1, play_col2 = st.columns(2)
-        with play_col1:
-            if st.button("▶ 재생", use_container_width=True, key="exp_log_play_btn"):
-                st.session_state.setdefault("exp_log_play", False)
-                st.session_state.exp_log_play = True
-        with play_col2:
-            if st.button("⏸ 정지", use_container_width=True, key="exp_log_stop_btn"):
-                st.session_state.exp_log_play = False
+    # 수동 포인터
+    x_now = st.slider("x 포인터(정지화면)", -view_L, view_L, 0.0, 0.05)
+
+    # 한 번만 재생 버튼
+    run_once = st.button("▶ 한 번 재생 (-L → +L)")
 
     ph = st.empty()
 
-    # 정지 시: 현재 슬라이더 값으로 그림 한 장
-    if not st.session_state.get("exp_log_play", False):
+    if not run_once:
+        # 정지: 현재 슬라이더 값으로 1장만 렌더
         ph.plotly_chart(_make_fig(a, x_now, view_L), use_container_width=True)
         return
 
-    # 재생: x가 -L → +L로 이동
-    total_frames = int(secs * fps)
+    # 버튼 클릭 시: 한 번만 좌→우로 애니메이션
+    total_frames = max(2, int(secs * fps))
     xs = np.linspace(-view_L, view_L, total_frames)
     start = time.perf_counter()
     for i, xv in enumerate(xs, 1):
-        if not st.session_state.get("exp_log_play", False):
-            break
         ph.plotly_chart(_make_fig(a, float(xv), view_L), use_container_width=True)
-        # 타임라인 맞추기
+        # 일정한 FPS 유지
         target = i / fps
         sleep = target - (time.perf_counter() - start)
         if sleep > 0:
             time.sleep(sleep)
-    st.session_state.exp_log_play = False
