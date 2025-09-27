@@ -9,7 +9,7 @@ from tabs import (
     tab_lincomb3,     # ← 여기 추가 (파일: tabs/tab_lincomb3.py)
     tab_circuits,
     tab_newton, tab_grad_descent, tab_fourier_series, tab_convolution,
-    tab_svd, tab_eigen2d, tab_bezier, tab_lissajous, tab_wave_interference, tab_markov
+    tab_svd, tab_eigen2d, tab_bezier, tab_lissajous, tab_wave_interference, tab_markov,tab_log_add
 )
 # utils에 남아있는 탭
 from utils import tab_vectors as tab_vec_combo
@@ -35,6 +35,7 @@ TAB_TITLES = [
     "푸리에 변환",
     "오일러 공식(애니메이션)",
     "지수·로그(쌍대)",
+    "로그-덧셈(곱↔합)",
     "벡터의 선형결합",
     "기초도구(전기·분수)",
     "3D 열벡터 합(연립방정식)",
@@ -46,6 +47,7 @@ TAB_TITLES = [
 TAB_MODULES = [
     tab_conic, tab_trig, tab_calc_def, tab_linreg, tab_taylor, tab_fft, tab_euler,
     tab_exp_log,
+    tab_log_add,
     tab_vec_combo,     # utils.tab_vectors
     tab_basics,         # tabs/tab_basic.py  (이전의 tab_basics 아님)
     tab_lincomb3,      # tabs/tab_lincomb3.py
