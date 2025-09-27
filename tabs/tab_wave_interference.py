@@ -1,31 +1,43 @@
-# tabs/tab_wave_interference.py
 import numpy as np, streamlit as st, plotly.graph_objects as go
 from utils.anim import playbar, step_loop
 
-def render():
-    st.subheader("두 사인파의 간섭 (비트)")
-    f1 = st.slider("f₁ (Hz)", 1.0, 10.0, 5.0, 0.1)
-    f2 = st.slider("f₂ (Hz)", 1.0, 10.0, 6.0, 0.1)
-    tmax = st.slider("표시 구간 (초)", 0.5, 5.0, 2.0, 0.1)
-    fps = st.slider("FPS", 5, 30, 20)
-    playing = playbar("beats")
-    ph = st.empty()
+PFX = "waveint"
 
-    def draw(t0):
-        t = np.linspace(t0, t0+tmax, 1200)
-        y1 = np.sin(2*np.pi*f1*t)
-        y2 = np.sin(2*np.pi*f2*t)
-        y  = y1 + y2
+def render():
+    st.subheader("두 파동의 간섭")
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        f1 = st.slider("f₁(Hz)", 0.1, 10.0, 2.0, 0.1, key=f"{PFX}:f1")
+        A1 = st.slider("A₁", 0.0, 2.0, 1.0, 0.1, key=f"{PFX}:A1")
+    with c2:
+        f2 = st.slider("f₂(Hz)", 0.1, 10.0, 2.5, 0.1, key=f"{PFX}:f2")
+        A2 = st.slider("A₂", 0.0, 2.0, 1.0, 0.1, key=f"{PFX}:A2")
+    with c3:
+        phase = st.slider("위상차 φ (rad)", 0.0, 2*np.pi, np.pi/3, 0.01, key=f"{PFX}:phi")
+        fps   = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
+    secs = st.slider("길이(초)", 1, 10, 5, key=f"{PFX}:secs")
+
+    x = np.linspace(0, 2*np.pi, 600)
+    holder = st.empty()
+    playing = playbar(PFX)
+    steps = max(2, int(secs*fps))
+
+    def draw(t):
+        # 진행파: 시간에 따라 위상 이동
+        y1 = A1*np.sin(f1*x - 2*np.pi*t)
+        y2 = A2*np.sin(f2*x - 2*np.pi*t + phase)
+        ys = y1 + y2
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=t, y=y1, name="y1", opacity=0.5))
-        fig.add_trace(go.Scatter(x=t, y=y2, name="y2", opacity=0.5))
-        fig.add_trace(go.Scatter(x=t, y=y,  name="합성", line=dict(width=3)))
-        fig.update_layout(template="plotly_white", height=480,
-                          xaxis_title="t", yaxis_title="amplitude")
-        ph.plotly_chart(fig, use_container_width=True)
+        fig.add_scatter(x=x, y=y1, mode="lines", name="y₁")
+        fig.add_scatter(x=x, y=y2, mode="lines", name="y₂")
+        fig.add_scatter(x=x, y=ys, mode="lines", name="y₁+y₂", line=dict(width=3))
+        fig.update_layout(template="plotly_white", height=450,
+                          xaxis_title="x", yaxis_title="amplitude")
+        holder.plotly_chart(fig, use_container_width=True)
 
     if playing:
-        for k in step_loop(120, fps=fps, key="beats"):
-            draw(k/fps*0.3)
+        for k in step_loop(steps, fps=fps, key=PFX):
+            draw(k/(steps-1))
     else:
         draw(0.0)

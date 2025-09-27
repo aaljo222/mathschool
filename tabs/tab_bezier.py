@@ -1,39 +1,58 @@
-# tabs/tab_bezier.py
 import numpy as np, streamlit as st, plotly.graph_objects as go
 from utils.anim import playbar, step_loop
 
-def _interp(P, t):  # 한 단계 선형보간
-    return (1-t)*P[:-1] + t*P[1:]
+PFX = "bezier4"
+
+def _bezier(P, t):
+    # De Casteljau (cubic)
+    A = (1-t)*P[0] + t*P[1]
+    B = (1-t)*P[1] + t*P[2]
+    C = (1-t)*P[2] + t*P[3]
+    D = (1-t)*A + t*B
+    E = (1-t)*B + t*C
+    F = (1-t)*D + t*E
+    return F, (A,B,C,D,E)
 
 def render():
-    st.subheader("Bézier 곡선 (de Casteljau 알고리즘)")
-    deg = st.radio("차수", [2,3], horizontal=True)
-    pts = []
-    cols = st.columns(deg+1)
-    defaults = [(0,0), (0.4,0.8), (0.8,-0.2), (1.1,0.6)]
-    for i in range(deg+1):
-        with cols[i]:
-            x = st.number_input(f"P{i}x", value=float(defaults[i][0]))
-            y = st.number_input(f"P{i}y", value=float(defaults[i][1]))
-            pts.append([x,y])
-    P0 = np.array(pts, float)
-    playing = playbar("bezier"); ph = st.empty()
+    st.subheader("Cubic Bézier (De Casteljau)")
+
+    cols = st.columns(4)
+    defaults = [(0.0,0.0),(0.3,0.8),(0.7,-0.6),(1.0,0.1)]
+    P = []
+    for i,c in enumerate(cols):
+        with c:
+            x = st.slider(f"P{i}x", -1.5, 1.5, float(defaults[i][0]), 0.01, key=f"{PFX}:x{i}")
+            y = st.slider(f"P{i}y", -1.0, 1.0,  float(defaults[i][1]), 0.01, key=f"{PFX}:y{i}")
+            P.append(np.array([x,y]))
+    P = np.array(P)
+
+    fps  = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
+    secs = st.slider("길이(초)", 1, 12, 6, key=f"{PFX}:secs")
+    steps = max(2, int(secs*fps))
+
+    holder = st.empty()
+    playing = playbar(PFX)
 
     def draw(t):
+        F,(A,B,C,D,E) = _bezier(P, t)
+        # 곡선 샘플
+        T  = np.linspace(0,1,300)
+        C2 = np.array([_bezier(P, tt)[0] for tt in T])
+
         fig = go.Figure()
-        # control polygon
-        fig.add_trace(go.Scatter(x=P0[:,0], y=P0[:,1], mode="lines+markers", name="control"))
-        # de Casteljau ladder
-        P = P0.copy()
-        while len(P)>1:
-            P = _interp(P, t)
-            fig.add_trace(go.Scatter(x=P[:,0], y=P[:,1], mode="lines+markers", showlegend=False))
-        fig.update_layout(template="plotly_white", height=500,
-                          xaxis=dict(range=[-0.2,1.4]), yaxis=dict(range=[-1,1], scaleanchor="x", scaleratio=1))
-        ph.plotly_chart(fig, use_container_width=True)
+        fig.add_scatter(x=P[:,0], y=P[:,1], mode="lines+markers", name="control")
+        fig.add_scatter(x=C2[:,0], y=C2[:,1], mode="lines", name="curve", line=dict(width=3))
+        fig.add_scatter(x=[F[0]], y=[F[1]], mode="markers", name="point", marker=dict(size=10))
+        # 보조선
+        fig.add_scatter(x=[A[0],B[0],C[0]], y=[A[1],B[1],C[1]], mode="lines", name="level1")
+        fig.add_scatter(x=[D[0],E[0]], y=[D[1],E[1]], mode="lines", name="level2")
+        fig.update_layout(template="plotly_white", height=520,
+                          xaxis=dict(range=[-1.6,1.6], scaleanchor="y", scaleratio=1),
+                          yaxis=dict(range=[-1.2,1.2]))
+        holder.plotly_chart(fig, use_container_width=True)
 
     if playing:
-        for i in step_loop(60, fps=24, key="bezier"):
-            draw(i/59)
+        for k in step_loop(steps, fps=fps, key=PFX):
+            draw(k/(steps-1))
     else:
-        draw(0.6)
+        draw(0.35)

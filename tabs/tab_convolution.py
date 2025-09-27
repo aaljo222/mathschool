@@ -1,42 +1,59 @@
-# tabs/tab_convolution.py
 import numpy as np, streamlit as st, plotly.graph_objects as go
 from utils.anim import playbar, step_loop
 
+PFX = "conv1d"
+
 def render():
-    st.subheader("이산 컨볼루션: 슬라이딩 곱-적분 시각화")
-    x = np.array(list(map(float, st.text_input("x[n] (콤마)", "1,2,1").split(","))))
-    h = np.array(list(map(float, st.text_input("h[n] (콤마)", "1,-1,1").split(","))))
-    N = len(x); M = len(h); L = N+M-1
-    n = np.arange(L)
+    st.subheader("1D 컨볼루션: 뒤집고 밀며 적분하기")
 
-    playing = playbar("conv")
-    left, right = st.columns(2)
-    phA = left.empty(); phB = right.empty()
+    L = 8.0
+    t = np.linspace(-L, L, 1200)
 
-    def draw(k):
-        # k번째 출력 계산
-        yk = 0.0
-        xs = []; hs = []
-        for m in range(N):
-            j = k-m
-            if 0 <= j < M:
-                xs.append(m); hs.append(h[j])
-                yk += x[m]*h[j]
-        # 막대그래프
-        fig1 = go.Figure()
-        fig1.add_bar(x=np.arange(N), y=x, name="x[n]")
-        fig1.add_bar(x=np.arange(M)+k-M+1, y=h[::-1], name="h[k-n]", opacity=0.5)
-        fig1.update_layout(template="plotly_white", height=420)
-        phA.plotly_chart(fig1, use_container_width=True)
+    c1,c2,c3 = st.columns(3)
+    with c1:
+        a = st.slider("x(t) 중심", -3.0, 3.0, -1.0, 0.1, key=f"{PFX}:a")
+        sx = st.slider("x 폭", 0.2, 2.5, 0.6, 0.05, key=f"{PFX}:sx")
+    with c2:
+        b = st.slider("h(t) 중심", -3.0, 3.0, 1.0, 0.1, key=f"{PFX}:b")
+        sh = st.slider("h 폭", 0.2, 2.5, 0.8, 0.05, key=f"{PFX}:sh")
+    with c3:
+        fps  = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
+        secs = st.slider("길이(초)", 1, 12, 6, key=f"{PFX}:secs")
+
+    x = np.exp(-(t-a)**2/(2*sx**2))
+    h = np.exp(-(t-b)**2/(2*sh**2))
+    dt = t[1]-t[0]
+
+    # 미리 전체 y(t) 계산
+    y_full = np.convolve(x, h[::-1], mode="same")*dt
+
+    holder = st.empty()
+    playing = playbar(PFX)
+    steps = max(2, int(secs*fps))
+
+    def draw(frac):
+        # τ = shift
+        tau = (2*frac-1)*L
+        h_flip_shift = np.interp(t, t[::-1]-tau, h, left=0, right=0)
+        prod = x * h_flip_shift
+        val  = prod.sum()*dt
+
+        fig = go.Figure()
+        fig.add_scatter(x=t, y=x, mode="lines", name="x(t)")
+        fig.add_scatter(x=t, y=h_flip_shift, mode="lines", name="h(−τ)")
+        fig.add_scatter(x=t, y=prod, mode="lines", name="곱", line=dict(width=1))
+        fig.add_vline(x=tau, line_dash="dot")
+        fig.update_layout(template="plotly_white", height=430,
+                          title=f"τ={tau:.2f},  y(τ)≈{val:.3f}")
+        holder.plotly_chart(fig, use_container_width=True)
 
         fig2 = go.Figure()
-        yy = np.zeros(L); yy[k]=yk
-        fig2.add_bar(x=n, y=yy, name="현재 y[k]", marker_color="#2c3e50")
-        fig2.update_layout(template="plotly_white", height=420, xaxis_title="k", yaxis_title="y")
-        phB.plotly_chart(fig2, use_container_width=True)
+        fig2.add_scatter(x=t, y=y_full, mode="lines", name="y(t)=x∗h")
+        fig2.update_layout(template="plotly_white", height=250)
+        st.plotly_chart(fig2, use_container_width=True)
 
     if playing:
-        for k in step_loop(L, fps=2, key="conv"):
-            draw(k)
+        for k in step_loop(steps, fps=fps, key=PFX):
+            draw(k/(steps-1))
     else:
-        draw(L//2)
+        draw(0.5)

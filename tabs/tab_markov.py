@@ -1,41 +1,42 @@
-# tabs/tab_markov.py
 import numpy as np, streamlit as st, plotly.graph_objects as go
 from utils.anim import playbar, step_loop
 
-def render():
-    st.subheader("3-상태 마르코프 체인: pₜ₊₁ = pₜ P")
-    cols = st.columns(3)
-    with cols[0]:
-        p = np.array([st.number_input("p₀(A)", 0.7), st.number_input("p₀(B)", 0.2), st.number_input("p₀(C)", 0.1)], float)
-        p = p/np.sum(p)
-    with cols[1]:
-        A = st.slider("A→(A,B,C)", 0.0, 1.0, (0.6, 0.3))
-        PA = np.array([A[0], A[1]-A[0], 1-A[1]])
-    with cols[2]:
-        B = st.slider("B→(A,B,C)", 0.0, 1.0, (0.2, 0.7))
-        PB = np.array([B[0], B[1]-B[0], 1-B[1]])
-    C1 = st.slider("C→A", 0.0, 1.0, 0.1); C2 = st.slider("C→A+B", 0.0, 1.0, 0.5)
-    PC = np.array([C1, max(C2-C1,0.0), max(1-C2,0.0)])
-    P = np.vstack([PA, PB, PC])  # rows sum 1
+PFX = "markov3"
 
-    steps = st.slider("스텝 수", 1, 60, 25); fps = st.slider("FPS", 2, 20, 8)
-    playing = playbar("markov"); ph = st.empty()
+def render():
+    st.subheader("3상태 마르코프 체인의 분포 수렴")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        alpha = st.slider("머무를 확률 α", 0.0, 1.0, 0.5, 0.01, key=f"{PFX}:alpha")
+        beta  = st.slider("시작 분포 b=(b1,b2,b3)", 0.0, 1.0, 0.33, 0.01, key=f"{PFX}:b1")
+        b     = np.array([beta, (1-beta)/2, (1-beta)/2])
+    with col2:
+        secs = st.slider("길이(초)", 1, 12, 6, key=f"{PFX}:secs")
+        fps  = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
+
+    # 순환 전이행렬: i -> i  확률 α,  i -> (i+1 mod 3) 확률 1-α
+    T = np.array([[alpha, 1-alpha, 0],
+                  [0,     alpha,  1-alpha],
+                  [1-alpha, 0,    alpha]], float)
+
+    playing = playbar(PFX)
+    holder  = st.empty()
+    steps   = max(2, int(secs*fps))
 
     def draw(t):
-        pt = p.copy()
-        hist = [pt]
-        for _ in range(t):
-            pt = pt @ P
-            hist.append(pt)
-        H = np.array(hist)
-        fig = go.Figure()
-        for i, name in enumerate(["A","B","C"]):
-            fig.add_trace(go.Scatter(y=H[:,i], x=list(range(len(H))), mode="lines+markers", name=name))
-        fig.update_layout(template="plotly_white", height=480, xaxis_title="t", yaxis_title="probability", yaxis=dict(range=[0,1]))
-        ph.plotly_chart(fig, use_container_width=True)
+        k = int(t*(steps-1))
+        p = b @ np.linalg.matrix_power(T, k)
+        fig = go.Figure(go.Bar(x=["A","B","C"], y=p, marker_color=["#e67e22","#27ae60","#2980b9"]))
+        fig.update_yaxes(range=[0,1])
+        fig.update_layout(template="plotly_white", height=420,
+                          title=f"분포 p_k (k={k})", bargap=0.25)
+        holder.plotly_chart(fig, use_container_width=True)
+
+        st.caption("T = " + str(T.round(3).tolist()))
 
     if playing:
-        for k in step_loop(steps, fps=fps, key="markov"):
-            draw(k)
+        for i in step_loop(steps, fps=fps, key=PFX):
+            draw(i/(steps-1))
     else:
-        draw(steps)
+        draw(0.0)
