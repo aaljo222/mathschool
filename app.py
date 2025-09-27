@@ -7,6 +7,7 @@ from tabs import (
     tab_exp_log,
     tab_basics,        # ← 여기 추가 (파일: tabs/tab_basic.py)
     tab_lincomb3,     # ← 여기 추가 (파일: tabs/tab_lincomb3.py)
+    tab_circuits
 )
 # utils에 남아있는 탭
 from utils import tab_vectors as tab_vec_combo
@@ -35,6 +36,7 @@ TAB_TITLES = [
     "벡터의 선형결합",
     "기초도구(전기·분수)",
     "3D 열벡터 합(연립방정식)",
+    "회로",  # ← 추가
 ]
 
 TAB_MODULES = [
@@ -43,6 +45,7 @@ TAB_MODULES = [
     tab_vec_combo,     # utils.tab_vectors
     tab_basics,         # tabs/tab_basic.py  (이전의 tab_basics 아님)
     tab_lincomb3,      # tabs/tab_lincomb3.py
+    tab_circuits
 ]
 
 if _HAS_MANIM:
