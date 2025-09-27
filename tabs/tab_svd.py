@@ -1,38 +1,29 @@
+# tabs/tab_svd.py
 import numpy as np, streamlit as st, plotly.graph_objects as go
-from utils.anim import playbar, step_loop
+from utils.anim import next_frame_index
 
-PFX = "svd_show"
+PFX = "svd"
 
 def render():
-    st.subheader("SVD 저랭크 근사 (열/행 모드)")
+    st.subheader("SVD: 랭크-k 근사로 복원")
 
-    n = st.slider("행렬 크기 n (n×n)", 20, 60, 32, key=f"{PFX}:n")
-    fps  = st.slider("FPS", 2, 30, 10, key=f"{PFX}:fps")
-    secs = st.slider("길이(초)", 1, 12, 6, key=f"{PFX}:secs")
+    n = st.slider("크기 n", 20, 60, 32, key=f"{PFX}:n")
+    # 예제 행렬 생성(부드러운 패턴)
+    x = np.linspace(-1,1,n)
+    X,Y = np.meshgrid(x,x)
+    M = np.sin(3*X) * np.cos(4*Y) + 0.3*np.outer(np.sin(2*x), np.ones_like(x))
 
-    # 예제 행렬 생성 (부드러운 패턴)
-    i = np.linspace(0, 2*np.pi, n)
-    j = np.linspace(0, 2*np.pi, n)
-    X,Y = np.meshgrid(i, j, indexing="ij")
-    A = (np.sin(2*X)+0.6*np.cos(3*Y)+0.4*np.sin(X+Y))
+    U,S,Vt = np.linalg.svd(M, full_matrices=False)
+    kmax = len(S)
 
-    U,S,Vt = np.linalg.svd(A, full_matrices=False)
-    rank = len(S)
+    col1, col2, col3 = st.columns(3)
+    with col1: steps = st.slider("프레임 수", 5, kmax, min(20,kmax), key=f"{PFX}:steps")
+    with col2: fps   = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
+    with col3: autorun = st.checkbox("자동 재생", True, key=f"{PFX}:auto")
 
-    playing = playbar(PFX)
-    holder = st.empty()
-    steps  = max(2, int(secs*fps))
+    k = 1 + next_frame_index(PFX, steps, fps, autorun) * (kmax-1) // max(1, steps-1)
 
-    def draw(t):
-        k = max(1, int(1 + t*(rank-1)))
-        Ak = (U[:,:k] * S[:k]) @ Vt[:k,:]
-        fig = go.Figure(data=go.Heatmap(z=Ak, colorscale="RdBu"))
-        fig.update_layout(template="plotly_white", height=520,
-                          title=f"rank-{k} 근사  (전체 rank={rank})")
-        holder.plotly_chart(fig, use_container_width=True)
-
-    if playing:
-        for m in step_loop(steps, fps=fps, key=PFX):
-            draw(m/(steps-1))
-    else:
-        draw(0.2)
+    Mk = (U[:, :k] * S[:k]) @ Vt[:k, :]
+    fig = go.Figure(data=go.Heatmap(z=Mk, colorscale="Viridis"))
+    fig.update_layout(template="plotly_white", height=520, title=f"rank-{k} 근사")
+    st.plotly_chart(fig, use_container_width=True)

@@ -1,58 +1,54 @@
+# tabs/tab_bezier.py
 import numpy as np, streamlit as st, plotly.graph_objects as go
-from utils.anim import playbar, step_loop
+from utils.anim import next_frame_index
 
-PFX = "bezier4"
-
-def _bezier(P, t):
-    # De Casteljau (cubic)
-    A = (1-t)*P[0] + t*P[1]
-    B = (1-t)*P[1] + t*P[2]
-    C = (1-t)*P[2] + t*P[3]
-    D = (1-t)*A + t*B
-    E = (1-t)*B + t*C
-    F = (1-t)*D + t*E
-    return F, (A,B,C,D,E)
+PFX = "bezier"
 
 def render():
-    st.subheader("Cubic Bézier (De Casteljau)")
+    st.subheader("3차 베지에 · De Casteljau")
 
-    cols = st.columns(4)
-    defaults = [(0.0,0.0),(0.3,0.8),(0.7,-0.6),(1.0,0.1)]
-    P = []
-    for i,c in enumerate(cols):
-        with c:
-            x = st.slider(f"P{i}x", -1.5, 1.5, float(defaults[i][0]), 0.01, key=f"{PFX}:x{i}")
-            y = st.slider(f"P{i}y", -1.0, 1.0,  float(defaults[i][1]), 0.01, key=f"{PFX}:y{i}")
-            P.append(np.array([x,y]))
-    P = np.array(P)
+    def pt(lbl, x, y):
+        c = st.columns(2)
+        return np.array([c[0].slider(f"{lbl}x",-2.0,2.0,x,0.1,key=f"{PFX}:{lbl}x"),
+                         c[1].slider(f"{lbl}y",-2.0,2.0,y,0.1,key=f"{PFX}:{lbl}y")])
 
-    fps  = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
-    secs = st.slider("길이(초)", 1, 12, 6, key=f"{PFX}:secs")
-    steps = max(2, int(secs*fps))
+    P0 = pt("P0", -1.5, -1.0)
+    P1 = pt("P1", -0.2,  1.2)
+    P2 = pt("P2",  0.8, -0.8)
+    P3 = pt("P3",  1.6,  0.9)
 
-    holder = st.empty()
-    playing = playbar(PFX)
+    fps   = st.slider("FPS", 2, 30, 15, key=f"{PFX}:fps")
+    steps = st.slider("프레임 수", 20, 200, 120, key=f"{PFX}:steps")
+    autorun = st.checkbox("자동 재생", True, key=f"{PFX}:auto")
 
-    def draw(t):
-        F,(A,B,C,D,E) = _bezier(P, t)
-        # 곡선 샘플
-        T  = np.linspace(0,1,300)
-        C2 = np.array([_bezier(P, tt)[0] for tt in T])
+    k = next_frame_index(PFX, steps, fps, autorun)
+    t = k / max(1, steps-1)
 
-        fig = go.Figure()
-        fig.add_scatter(x=P[:,0], y=P[:,1], mode="lines+markers", name="control")
-        fig.add_scatter(x=C2[:,0], y=C2[:,1], mode="lines", name="curve", line=dict(width=3))
-        fig.add_scatter(x=[F[0]], y=[F[1]], mode="markers", name="point", marker=dict(size=10))
-        # 보조선
-        fig.add_scatter(x=[A[0],B[0],C[0]], y=[A[1],B[1],C[1]], mode="lines", name="level1")
-        fig.add_scatter(x=[D[0],E[0]], y=[D[1],E[1]], mode="lines", name="level2")
-        fig.update_layout(template="plotly_white", height=520,
-                          xaxis=dict(range=[-1.6,1.6], scaleanchor="y", scaleratio=1),
-                          yaxis=dict(range=[-1.2,1.2]))
-        holder.plotly_chart(fig, use_container_width=True)
+    # 곡선 샘플
+    T = np.linspace(0,1,300)[:,None]
+    B = (1-T)**3*P0 + 3*(1-T)**2*T*P1 + 3*(1-T)*T**2*P2 + T**3*P3
 
-    if playing:
-        for k in step_loop(steps, fps=fps, key=PFX):
-            draw(k/(steps-1))
-    else:
-        draw(0.35)
+    # De Casteljau
+    A = (1-t)*P0 + t*P1
+    Bm= (1-t)*P1 + t*P2
+    C = (1-t)*P2 + t*P3
+    D = (1-t)*A  + t*Bm
+    E = (1-t)*Bm + t*C
+    S = (1-t)*D  + t*E  # curve point
+
+    fig = go.Figure()
+    # control polygon
+    fig.add_scatter(x=[P0[0],P1[0],P2[0],P3[0]], y=[P0[1],P1[1],P2[1],P3[1]],
+                    mode="lines+markers", name="control", line=dict(dash="dash"))
+    # curve
+    fig.add_scatter(x=B[:,0], y=B[:,1], mode="lines", name="Bezier", line=dict(width=3))
+    # intermediates
+    for (X,Y,nm) in [([A[0],Bm[0],C[0]],[A[1],Bm[1],C[1]],"level1"),
+                     ([D[0],E[0]],[D[1],E[1]],"level2")]:
+        fig.add_scatter(x=X, y=Y, mode="lines+markers", name=nm, showlegend=False)
+    fig.add_scatter(x=[S[0]], y=[S[1]], mode="markers", name="point", marker=dict(size=10))
+    fig.update_layout(template="plotly_white", height=520,
+                      xaxis=dict(range=[-2.2,2.2], zeroline=True),
+                      yaxis=dict(range=[-2.0,2.0], zeroline=True, scaleanchor="x", scaleratio=1),
+                      title=f"t={t:.2f}")
+    st.plotly_chart(fig, use_container_width=True)

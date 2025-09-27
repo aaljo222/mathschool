@@ -1,67 +1,44 @@
+# tabs/tab_newton.py
 import numpy as np, streamlit as st, plotly.graph_objects as go
-from utils.anim import playbar, step_loop
+from utils.anim import next_frame_index
 
 PFX = "newton1d"
 
 def render():
-    st.subheader("뉴턴 방법(1변수) — 접선으로 뿌리 찾기")
+    st.subheader("뉴턴법 (1D)")
 
-    func = st.selectbox("함수", ["x^3 - x - 1", "cos x - x/2", "x - tanh(2x)"],
-                        key=f"{PFX}:f")
-    x0   = st.slider("초기값 x₀", -3.0, 3.0, 1.0, 0.05, key=f"{PFX}:x0")
-    fps  = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
-    secs = st.slider("길이(초)", 1, 12, 6, key=f"{PFX}:secs")
-    steps = max(2, int(secs*fps))
+    st.latex(r"f(x)=x^3 - x - 1,\quad x_{n+1}=x_n - \frac{f(x_n)}{f'(x_n)}")
+    x0 = st.slider("초기값 x₀", -2.0, 2.0, 0.5, 0.05, key=f"{PFX}:x0")
 
-    if func == "x^3 - x - 1":
-        f  = lambda x: x**3 - x - 1
-        df = lambda x: 3*x**2 - 1
-        xr = 1.32
-    elif func == "cos x - x/2":
-        f  = lambda x: np.cos(x) - x/2
-        df = lambda x: -np.sin(x) - 0.5
-        xr = 0.0
-    else:
-        f  = lambda x: x - np.tanh(2*x)
-        df = lambda x: 1 - 2*(1/np.cosh(2*x))**2
-        xr = 0.0
+    fps   = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
+    steps = st.slider("스텝 수", 2, 40, 12, key=f"{PFX}:steps")
+    autorun = st.checkbox("자동 재생", True, key=f"{PFX}:auto")
 
-    xs = np.linspace(-3, 3, 1000)
-    holder = st.empty()
-    playing = playbar(PFX)
+    f  = lambda x: x**3 - x - 1
+    fp = lambda x: 3*x**2 - 1
 
-    def iterate(kmax):
-        pts = [x0]
-        x = x0
-        for _ in range(kmax):
-            x = x - f(x)/df(x)
-            pts.append(x)
-        return np.array(pts)
+    xs = [x0]
+    for _ in range(steps-1):
+        xn = xs[-1]
+        xs.append(xn - f(xn)/ (fp(xn) + 1e-12))
+    xs = np.array(xs)
 
-    def draw(t):
-        k = int(t*(steps-1))
-        P = iterate(k)
+    k = next_frame_index(PFX, steps, fps, autorun)
+    xline = np.linspace(-2.2, 2.2, 800)
 
-        fig = go.Figure()
-        fig.add_scatter(x=xs, y=f(xs), mode="lines", name="f(x)")
-        # 접선들
-        for i in range(len(P)-1):
-            xk = P[i]
-            yk = f(xk)
-            slope = df(xk)
-            yline = yk + slope*(xs - xk)
-            fig.add_scatter(x=xs, y=yline, mode="lines",
-                            line=dict(dash="dot"), name=f"tangent {i+1}", showlegend=False)
-            fig.add_scatter(x=[xk], y=[yk], mode="markers", showlegend=False)
+    fig = go.Figure()
+    fig.add_scatter(x=xline, y=f(xline), mode="lines", name="f(x)")
+    fig.add_hline(y=0, line_color="#888")
 
-        fig.add_hline(y=0, line_color="#999")
-        fig.update_layout(template="plotly_white", height=520,
-                          title=f"k={k},  근사해 ≈ {P[-1]:.6f} (참고: {xr:.3f})",
-                          xaxis_title="x", yaxis_title="f(x)")
-        holder.plotly_chart(fig, use_container_width=True)
+    # 현재 점과 다음 접선
+    xn = xs[k]
+    fig.add_scatter(x=[xn], y=[f(xn)], mode="markers", name=f"x{k}")
+    # 접선 y = f(xn) + f'(xn)(x-xn)
+    ytan = f(xn) + fp(xn)*(xline - xn)
+    fig.add_scatter(x=xline, y=ytan, mode="lines", name="tangent", line=dict(dash="dot"))
 
-    if playing:
-        for i in step_loop(steps, fps=fps, key=PFX):
-            draw(i/(steps-1))
-    else:
-        draw(0.3)
+    fig.update_layout(template="plotly_white", height=520,
+                      xaxis=dict(range=[-2.2,2.2]),
+                      yaxis=dict(range=[-3,3]),
+                      title=f"step {k}/{steps-1},  x_k ≈ {xn:.6f}")
+    st.plotly_chart(fig, use_container_width=True)

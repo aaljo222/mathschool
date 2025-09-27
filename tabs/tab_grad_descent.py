@@ -1,54 +1,43 @@
+# tabs/tab_grad_descent.py
 import numpy as np, streamlit as st, plotly.graph_objects as go
-from utils.anim import playbar, step_loop
+from utils.anim import next_frame_index
 
-PFX = "gd2d"
+PFX = "gd2"
 
 def render():
-    st.subheader("경사하강법 (2변수)")
+    st.subheader("경사하강법 (2D 쿼드라틱)")
 
-    a = st.slider("a", 0.2, 3.0, 1.0, 0.1, key=f"{PFX}:a")
-    b = st.slider("b", 0.2, 3.0, 2.0, 0.1, key=f"{PFX}:b")
-    c = st.slider("교차항 c", -1.5, 1.5, 0.2, 0.05, key=f"{PFX}:c")
-    eta = st.slider("학습률 η", 0.01, 1.0, 0.2, 0.01, key=f"{PFX}:eta")
-    fps = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
-    secs = st.slider("길이(초)", 1, 12, 6, key=f"{PFX}:secs")
+    # f(x,y) = 1/2 (x,y)ᵀ A (x,y)
+    a11 = st.slider("a11", 0.2, 4.0, 2.0, 0.1, key=f"{PFX}:a11")
+    a22 = st.slider("a22", 0.2, 4.0, 0.8, 0.1, key=f"{PFX}:a22")
+    a12 = st.slider("a12", -1.0, 1.0, 0.3, 0.05, key=f"{PFX}:a12")
+    A = np.array([[a11, a12], [a12, a22]])
 
-    A = np.array([[a, c/2],[c/2, b]])
-    # 양정치 보장
-    A = A.T @ A + 0.1*np.eye(2)
+    x0 = np.array([st.slider("x₀", -3.0, 3.0, 2.0, 0.1, key=f"{PFX}:x0"),
+                   st.slider("y₀", -3.0, 3.0, -1.5, 0.1, key=f"{PFX}:y0")])
+    lr = st.slider("학습률 η", 0.01, 0.5, 0.12, 0.01, key=f"{PFX}:lr")
 
-    x0 = np.array([1.5, -1.0])
-    holder = st.empty()
-    playing = playbar(PFX)
-    steps = max(2, int(secs*fps))
+    fps   = st.slider("FPS", 2, 30, 12, key=f"{PFX}:fps")
+    steps = st.slider("스텝 수", 5, 120, 60, key=f"{PFX}:steps")
+    autorun = st.checkbox("자동 재생", True, key=f"{PFX}:auto")
 
-    def f(x): return 0.5 * x @ A @ x
-    def g(x): return A @ x
+    # 경로 미리 계산
+    xs = [x0]
+    for _ in range(steps-1):
+        g = A @ xs[-1]
+        xs.append(xs[-1] - lr * g)
+    xs = np.array(xs)
 
-    # 등고선용 격자
-    xs = np.linspace(-2.5, 2.5, 120)
-    ys = np.linspace(-2.5, 2.5, 120)
-    X,Y = np.meshgrid(xs, ys)
-    Z = 0.5*(A[0,0]*X**2 + 2*A[0,1]*X*Y + A[1,1]*Y**2)
+    k = next_frame_index(PFX, steps, fps, autorun)
 
-    def draw(t):
-        k = int(t*(steps-1))
-        path = [x0.copy()]
-        x = x0.copy()
-        for _ in range(k):
-            x -= eta * g(x)
-            path.append(x.copy())
-        P = np.array(path)
+    X = np.linspace(-3,3,120)
+    Y = np.linspace(-3,3,120)
+    XX,YY = np.meshgrid(X,Y)
+    ZZ = 0.5*(A[0,0]*XX**2 + 2*A[0,1]*XX*YY + A[1,1]*YY**2)
 
-        fig = go.Figure(data=go.Contour(x=xs, y=ys, z=Z, contours=dict(showlabels=True)))
-        fig.add_scatter(x=P[:,0], y=P[:,1], mode="lines+markers", name="path",
-                        line=dict(width=3))
-        fig.update_layout(template="plotly_white", height=520,
-                          xaxis_title="x", yaxis_title="y")
-        holder.plotly_chart(fig, use_container_width=True)
-
-    if playing:
-        for k in step_loop(steps, fps=fps, key=PFX):
-            draw(k/(steps-1))
-    else:
-        draw(0.5)
+    fig = go.Figure(data=go.Contour(x=X, y=Y, z=ZZ, contours_coloring="lines", showscale=False))
+    fig.add_scatter(x=xs[:k+1,0], y=xs[:k+1,1], mode="lines+markers", name="path", line=dict(width=3))
+    fig.update_layout(template="plotly_white", height=520,
+                      xaxis=dict(range=[-3,3]), yaxis=dict(range=[-3,3], scaleanchor="x", scaleratio=1),
+                      title=f"step {k}/{steps-1}")
+    st.plotly_chart(fig, use_container_width=True)
