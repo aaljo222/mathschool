@@ -2,7 +2,7 @@
 import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
-from utils.anim import next_frame_index
+from utils.anim import step_loop
 
 PFX = "logmul"
 
@@ -38,42 +38,53 @@ def render():
     steps = st.slider("프레임 수", 20, 240, 120, key=f"{PFX}:steps")
     autorun = st.checkbox("자동 재생", True, key=f"{PFX}:auto")
 
-    # ── 한 프레임 인덱스 결정(중복 Element 방지) ───────────────────────────
-    k   = next_frame_index(PFX, steps, fps, autorun)
-    tau = 2*np.pi * (k / max(1, steps-1))
+    # 출력 위치(플롯 2개)
+    ph1 = st.empty()
+    ph2 = st.empty()
 
-    # 항상 양수인 a(t), b(t)
-    a = a0 + aA*(1 + np.sin(tau*w1))
-    b = b0 + bA*(1 + np.sin(tau*w2 + phase))
-    ab = a * b
+    def draw(frac: float):
+        """0~1 사이 진행률로 한 프레임 그리기"""
+        tau = 2*np.pi * frac
 
-    la, lb = log_fn(a), log_fn(b)
-    sum_logs = la + lb
-    log_ab   = log_fn(ab)
-    exp_sum  = exp_fn(sum_logs)
-    err      = float(exp_sum - ab)
+        # 항상 양수인 a(t), b(t)
+        a = a0 + aA*(1 + np.sin(tau*w1))
+        b = b0 + bA*(1 + np.sin(tau*w2 + phase))
+        ab = a * b
 
-    # ── (1) 곱셈 영역 막대 ───────────────────────────────────────────────
-    fig1 = go.Figure()
-    fig1.add_bar(x=["a", "b", "a·b"], y=[a, b, ab],
-                 marker_color=["#1f77b4", "#2ca02c", "#d62728"])
-    fig1.update_layout(template="plotly_white", height=360, yaxis_title="값",
-                       title=f"a={a:.3f},  b={b:.3f},  a·b={ab:.3f}")
+        la, lb = log_fn(a), log_fn(b)
+        sum_logs = la + lb
+        log_ab   = log_fn(ab)
+        exp_sum  = exp_fn(sum_logs)
+        err      = float(exp_sum - ab)
 
-    # ── (2) 로그-덧셈 영역 막대+포인트 ───────────────────────────────────
-    fig2 = go.Figure()
-    fig2.add_bar(x=[f"{log_label} a", f"{log_label} b", f"{log_label}(a·b)"],
-                 y=[la, lb, log_ab],
-                 marker_color=["#1f77b4", "#2ca02c", "#9467bd"])
-    fig2.add_scatter(x=["합"], y=[sum_logs], mode="markers",
-                     marker=dict(size=14, symbol="diamond", color="#ff7f0e"),
-                     name=f"합({log_label}a+{log_label}b)")
-    fig2.update_layout(template="plotly_white", height=360, yaxis_title="로그 값",
-                       title=f"{log_label}(a·b)  =  {log_label}a + {log_label}b  ≈  {sum_logs:.3f}")
+        # (1) 곱셈 영역
+        fig1 = go.Figure()
+        fig1.add_bar(x=["a", "b", "a·b"], y=[a, b, ab],
+                     marker_color=["#1f77b4", "#2ca02c", "#d62728"])
+        fig1.update_layout(template="plotly_white", height=360, yaxis_title="값",
+                           title=f"a={a:.3f},  b={b:.3f},  a·b={ab:.3f}")
+        ph1.plotly_chart(fig1, use_container_width=True)
 
-    st.plotly_chart(fig1, use_container_width=True)
-    st.plotly_chart(fig2, use_container_width=True)
+        # (2) 로그-덧셈 영역
+        fig2 = go.Figure()
+        fig2.add_bar(x=[f"{log_label} a", f"{log_label} b", f"{log_label}(a·b)"],
+                     y=[la, lb, log_ab],
+                     marker_color=["#1f77b4", "#2ca02c", "#9467bd"])
+        fig2.add_scatter(x=["합"], y=[sum_logs], mode="markers",
+                         marker=dict(size=14, symbol="diamond", color="#ff7f0e"),
+                         name=f"합({log_label}a+{log_label}b)")
+        fig2.update_layout(template="plotly_white", height=360, yaxis_title="로그 값",
+                           title=f"{log_label}(a·b)  =  {log_label}a + {log_label}b  ≈  {sum_logs:.3f}")
+        ph2.plotly_chart(fig2, use_container_width=True)
 
-    st.markdown("---")
-    st.latex(rf"{log_label}(ab) = {log_label}a + {log_label}b,\qquad {exp_label}({log_label}a + {log_label}b) = ab")
-    st.caption(f"역로그 복원: exp(sum) = {exp_sum:.6f},  a·b = {ab:.6f},  오차 = {err:.2e} (수치오차) ")
+        st.markdown("---")
+        st.latex(rf"{log_label}(ab) = {log_label}a + {log_label}b,\qquad {exp_label}({log_label}a + {log_label}b) = ab")
+        st.caption(f"역로그 복원: exp(sum) = {exp_sum:.6f},  a·b = {ab:.6f},  오차 = {err:.2e} (수치오차) ")
+
+    # 자동/수동 모드
+    if autorun:
+        for k in step_loop(steps, fps=fps, key=PFX):
+            draw(k / max(1, steps-1))
+    else:
+        k = st.slider("프레임", 0, steps-1, 0, key=f"{PFX}:frame")
+        draw(k / max(1, steps-1))
