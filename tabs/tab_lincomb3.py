@@ -5,7 +5,7 @@ import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
 
-# LaTeX 헬퍼 (모듈화)
+# LaTeX 헬퍼(모듈화)
 from utils import latex as L
 
 
@@ -51,44 +51,47 @@ def _base_layout(rng):
         legend=dict(bgcolor="rgba(255,255,255,.6)"),
     )
 
-def _make_frames(vs, xs, order=("v1","v2","v3"), steps_each=30):
-    """선택/순서대로 Σ = x1 v1 + x2 v2 + x3 v3 누적합 궤적 프레임"""
+def _path_until(vs, xs, order, steps_each, progress):
+    """
+    order에 정한 순서대로 x_i v_i를 누적.
+    steps_each * len(order) 개의 가상 스텝 중 progress(0..1)에 해당하는 지점까지만 경로/현재점 계산
+    """
     v1,v2,v3 = vs
     x1,x2,x3 = xs
     pool = {"v1": (v1,x1), "v2": (v2,x2), "v3": (v3,x3)}
+    segs = [pool[tag] for tag in order if tag in pool]
 
-    frames=[]
+    total_steps = max(1, steps_each * len(segs))
+    kmax = int(np.clip(progress, 0.0, 1.0) * total_steps)
+
     origin = np.zeros(3)
     cur = origin.copy()
     hist = [cur.copy()]
+    done_steps = 0
 
-    for tag in order:
-        if tag not in pool:
-            continue
-        v, coef = pool[tag]
+    for v, coef in segs:
         for k in range(1, steps_each+1):
-            t = k/steps_each
-            nxt = cur + (t*coef)*v
+            if done_steps >= kmax:
+                # 여기서 멈추면 이전 cur에서 현재 세그먼트의 비율만큼만 진행
+                t_partial = 0.0 if steps_each == 0 else (kmax - (done_steps)) / steps_each
+                t_partial = np.clip(t_partial, 0.0, 1.0)
+                cur = cur + (t_partial * coef) * v
+                hist.append(cur.copy())
+                return hist, cur
+            # 계속 진행
+            t = k / steps_each
+            nxt = cur + (t * coef) * v
             hist.append(nxt.copy())
-            frames.append(go.Frame(
-                name=f"{tag}-{k}",
-                data=[
-                    go.Scatter3d(x=[p[0] for p in hist],
-                                 y=[p[1] for p in hist],
-                                 z=[p[2] for p in hist],
-                                 mode="lines",
-                                 line=dict(width=4, color="#7f8c8d"),
-                                 name="partial sum", showlegend=False),
-                    *_arrow3d(origin, nxt, "Σ", "#2c3e50", width=8, showlegend=False),
-                ]
-            ))
-        cur = cur + coef*v
-    return frames, hist[-1] if hist else origin
+            done_steps += 1
+        cur = cur + coef * v
+
+    # progress=1.0이면 완주
+    return hist, cur
 
 
 # ────────────────────────────── 메인 ──────────────────────────────
 def render():
-    st.subheader("3×3 연립방정식  /  열벡터 선형결합 애니메이션")
+    st.subheader("3×3 연립방정식  /  열벡터 선형결합 (이벤트 1회 갱신)")
 
     # 좌측 설정
     c0,c1,c2 = st.columns([1.2,1.2,1.0])
@@ -96,11 +99,10 @@ def render():
         preset = st.selectbox("프리셋",
             ["Orthonormal(I)", "Skewed", "Nearly singular", "Custom"])
     with c1:
-        secs = st.slider("길이(초)", 2, 12, 6, 1)
-        fps  = st.slider("FPS", 10, 40, 24, 2)
+        steps_each = st.slider("세그먼트 단계(궤적 해상도)", 5, 100, 30, 5)
     with c2:
-        steps_each = st.slider("세그먼트 단계", 10, 80, 30, 5,
-                               help="선형결합에서 각 구간의 프레임 수")
+        progress = st.slider("진행도", 0.0, 1.0, 1.0, 0.01,
+                             help="선형결합 누적합을 이 비율만큼 진행한 지점까지 그립니다.")
 
     # 열벡터 v1,v2,v3 (프리셋/커스텀)
     if preset == "Orthonormal(I)":
@@ -138,7 +140,7 @@ def render():
         res = float(np.linalg.norm(A @ x - b))
         solv_text = "비가역/근사해(최소제곱)"
 
-    # ── 표기 모드 선택 + LaTeX 출력(모듈 재사용) ──
+    # ── 표기 모드 선택 + LaTeX 출력 ──
     show_mode = st.radio("표시 형식", ["행렬식 A·x=b", "연립방정식", "선형결합식"], horizontal=True)
     if show_mode == "행렬식 A·x=b":
         st.latex(L.axb(A, b, with_labels=True, det=detA, residual=res, digits=3))
@@ -146,7 +148,7 @@ def render():
     elif show_mode == "연립방정식":
         st.latex(L.system(A, b, digits=3))
         st.latex(L.vector("x", x, digits=3))
-    else:  # 선형결합식
+    else:
         st.latex(L.lincomb("Ax", x, basis=(r"v_1", r"v_2", r"v_3"), digits=3))
 
     st.caption(solv_text + "   ·   x = " + ", ".join(f"{t:.3g}" for t in x))
@@ -158,61 +160,40 @@ def render():
         st.info("하나 이상의 벡터를 선택하세요. (예: v1, v2, v3)")
         order = ["v1","v2","v3"]
 
-    # ── 3D 정지 요소 ──
+    # ── 정지 요소 + 부분합 경로(단일 렌더) ──
     all_pts = np.column_stack([np.zeros(3), *vs, b, A@x])
     R = float(np.max(np.abs(all_pts))) * 1.3 or 1.0
     rng = [-R, R]
 
     fig = go.Figure()
     for tr in _axes(R): fig.add_trace(tr)
-
-    # 열벡터 v1,v2,v3
     fig.add_traces(_arrow3d([0,0,0], vs[0], "v1", "#8e44ad"))
     fig.add_traces(_arrow3d([0,0,0], vs[1], "v2", "#16a085"))
     fig.add_traces(_arrow3d([0,0,0], vs[2], "v3", "#d35400"))
-
-    # 목표 b, 해 Ax
     fig.add_traces(_arrow3d([0,0,0], b,   "b (target)", "#c0392b"))
     fig.add_traces(_arrow3d([0,0,0], A@x, "Ax", "#2c3e50"))
 
-    # ── 프레임(부분합 경로) ──
-    frames, _last = _make_frames(vs, x, order=tuple(order), steps_each=steps_each)
-    fig.frames = frames
+    # 진행도에 맞는 경로 계산(프레임 없음)
+    hist, cur = _path_until(vs, x, order=tuple(order), steps_each=steps_each, progress=progress)
+    hx, hy, hz = (np.array(hist)[:,0], np.array(hist)[:,1], np.array(hist)[:,2])
 
-    # 애니메이션 컨트롤
-    total = max(len(frames), 1)
+    # 회색 궤적 + 현재 Σ
+    fig.add_trace(go.Scatter3d(x=hx, y=hy, z=hz, mode="lines",
+                               line=dict(width=4, color="#7f8c8d"),
+                               name="partial sum"))
+    fig.add_traces(_arrow3d([0,0,0], cur, "Σ", "#2c3e50", width=8, showlegend=True))
+
     fig.update_layout(
         **_base_layout(rng),
-        title="열벡터 선형결합:  Σ = x₁v₁ + x₂v₂ + x₃v₃  (회색 궤적)",
-        updatemenus=[{
-            "type":"buttons", "direction":"left", "x":0.0, "y":1.08,
-            "buttons":[
-                {"label":"▶ Play","method":"animate",
-                 "args":[None,{"frame":{"duration": int(1000*secs/total), "redraw":True},
-                               "fromcurrent":True,"transition":{"duration":0}}]},
-                {"label":"⏸ Pause","method":"animate",
-                 "args":[[None],{"mode":"immediate",
-                                 "frame":{"duration":0,"redraw":False},
-                                 "transition":{"duration":0}}]},
-            ],
-        }],
-        sliders=[{
-            "x":0.05,"y":1.02,"len":0.9,
-            "steps":[{"args":[[f.name],
-                              {"mode":"immediate",
-                               "frame":{"duration":0,"redraw":True},
-                               "transition":{"duration":0}}],
-                      "label":str(i+1),"method":"animate"} for i,f in enumerate(frames)]
-        }],
+        title="열벡터 선형결합:  Σ = x₁v₁ + x₂v₂ + x₃v₃  (회색 궤적 · 단일 렌더)"
     )
-
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown(
         """
 **설명**  
 - \(A=[v_1\ v_2\ v_3]\), \(Ax = x_1v_1 + x_2v_2 + x_3v_3\).  
-- 선택한 순서대로 \(x_i v_i\)를 누적하여 회색 궤적을 그립니다.  
+- ‘진행도’ 슬라이더로 \(x_i v_i\)의 누적합을 원하는 비율까지만 그립니다(자동재생/버튼 없음).  
 - \(\det(A)\neq 0\) 이면 유일해, 그렇지 않으면 최소제곱 해를 표시합니다.
         """
     )
