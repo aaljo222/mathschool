@@ -6,15 +6,9 @@ from utils import style  # style.inject_css(), style.show_notice_banner()
 
 # ── 탭 모듈들 (tabs 폴더) ───────────────────────────────────────────────────
 from tabs import (
-    tab_conic,  # 포물선/쌍곡선
-    tab_trig,  # 삼각함수
-    tab_calc_def,  # 미분·적분(정의)
-    tab_linreg,  # 선형회귀
-    tab_taylor,  # 테일러 시리즈
-    tab_fft,  # 푸리에 변환
-    tab_euler, tab_basics,  # 오일러 공식(애니메이션)
+    tab_conic, tab_trig, tab_calc_def, tab_linreg, tab_taylor, tab_fft, tab_euler,
+    tab_exp_log,                      # ← 추가
 )
-
 # 기존 utils에 남아있는 탭
 from utils import tab_vectors as tab_vec_combo   # 벡터 선형결합
 from tabs import tab_lincomb3
@@ -40,21 +34,16 @@ TAB_TITLES = [
     "테일러 시리즈",
     "푸리에 변환",
     "오일러 공식(애니메이션)",
+    "지수·로그(쌍대)",
     "벡터의 선형결합",
     "기초도구(전기·분수)",
     "3D 열벡터 합(연립방정식)"
 ]
+
 TAB_MODULES = [
-    tab_conic,
-    tab_trig,
-    tab_calc_def,
-    tab_linreg,
-    tab_taylor,
-    tab_fft,
-    tab_euler,
-    tab_vec_combo,
-    tab_basics,
-    tab_lincomb3
+    tab_conic, tab_trig, tab_calc_def, tab_linreg, tab_taylor, tab_fft, tab_euler,
+    tab_exp_log,                      # ← 추가
+    tab_vec_combo, tab_basics,
 ]
 
 # Manim 탭이 준비된 경우 리스트에 추가
