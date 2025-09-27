@@ -7,7 +7,9 @@ from tabs import (
     tab_exp_log,
     tab_basics,        # ← 여기 추가 (파일: tabs/tab_basic.py)
     tab_lincomb3,     # ← 여기 추가 (파일: tabs/tab_lincomb3.py)
-    tab_circuits
+    tab_circuits,
+    tab_newton, tab_grad_descent, tab_fourier_series, tab_convolution,
+    tab_svd, tab_eigen2d, tab_bezier, tab_lissajous, tab_wave_interference, tab_markov
 )
 # utils에 남아있는 탭
 from utils import tab_vectors as tab_vec_combo
@@ -36,7 +38,9 @@ TAB_TITLES = [
     "벡터의 선형결합",
     "기초도구(전기·분수)",
     "3D 열벡터 합(연립방정식)",
-    "회로",  # ← 추가
+    "회로",
+    "뉴턴법", "경사하강법", "푸리에 급수", "이산 컨볼루션", "SVD 압축",
+    "2×2 변환·고유벡터", "베지에", "리사주", "파동 간섭", "마르코프"
 ]
 
 TAB_MODULES = [
@@ -45,7 +49,9 @@ TAB_MODULES = [
     tab_vec_combo,     # utils.tab_vectors
     tab_basics,         # tabs/tab_basic.py  (이전의 tab_basics 아님)
     tab_lincomb3,      # tabs/tab_lincomb3.py
-    tab_circuits
+    tab_circuits,
+    tab_newton, tab_grad_descent, tab_fourier_series, tab_convolution,
+    tab_svd, tab_eigen2d, tab_bezier, tab_lissajous, tab_wave_interference, tab_markov
 ]
 
 if _HAS_MANIM:
